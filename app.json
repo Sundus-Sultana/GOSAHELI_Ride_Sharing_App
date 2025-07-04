@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "saheli",
+    "slug": "saheli",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSy_kt7eXvL-7dqFns8j6wjDoSb5N1tBmZds"
+        }
+      },
+      "web": {
+        "favicon": "./assets/favicon.png"
+      },
+      "package": "com.anonymous.saheli"
+    }
+  }
+}
