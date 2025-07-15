@@ -11,7 +11,7 @@ import { API_URL as BASE_URL } from '../../api.js'; // ✅ alias to avoid name c
 const USER_ENDPOINT = `${BASE_URL}/user`; // ✅ final usable endpoint
 
 export default function PhoneVerificationScreen({ route, navigation }) {
-  const { email, username, password, phoneNo } = route.params;
+  const { email, userName, password, phoneNo } = route.params;
 
   const [verificationId, setVerificationId] = useState(null);
   const [code, setCode] = useState('');
@@ -42,21 +42,27 @@ export default function PhoneVerificationScreen({ route, navigation }) {
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      await updateProfile(userCredential.user, {
-        displayName: username,
-      });
+     await updateProfile(userCredential.user, {
+  displayName: userName,
+});
 
       // ✅ Save to PostgreSQL
-      await axios.post(USER_ENDPOINT, {
-        email,
-        username,
-        password,
-        phoneNo,
-      });
+    await axios.post(USER_ENDPOINT, {
+  email,
+  username: userName,  // ✅ Correct key sent to backend, correct value used
+  password,
+  phoneNo,
+});
 
-      Alert.alert('Success', 'Phone verified and account created!', [
-        { text: 'Continue', onPress: () => navigation.replace('Home') }
-      ]);
+    Alert.alert('Success', 'Phone verified and account created!', [
+  {
+    text: 'Continue',
+    onPress: () => navigation.replace('Home', {
+      userName: userName, // ✅ pass to Home screen
+    }),
+  },
+]);
+
     } catch (error) {
       console.error('Verification error:', error);
       Alert.alert('Error', 'Verification failed. Please check the code and try again.');

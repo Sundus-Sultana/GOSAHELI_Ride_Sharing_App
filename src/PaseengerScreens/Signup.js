@@ -123,7 +123,7 @@ const response = await axios.post(`${API_URL}/user/check-exists`, {
     // ✅ Step: All good — go to OTP screen
     navigation.navigate('PhoneVerificationScreen', {
       email: trimmedEmail,
-      username: trimmedUsername,
+      userName: trimmedUsername,
       password: trimmedPassword,
       phoneNo: trimmedPhone,
     });
