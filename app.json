@@ -12,24 +12,50 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide ride services and navigation.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide ride services and navigation.",
+        "UIBackgroundModes": ["location", "fetch"]
+      },
+      "bundleIdentifier": "com.anonymous.saheli",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ],
+      "package": "com.anonymous.saheli",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSy_kt7eXvL-7dqFns8j6wjDoSb5N1tBmZds"
         }
-      },
-      "web": {
-        "favicon": "./assets/favicon.png"
-      },
-      "package": "com.anonymous.saheli"
+      }
+    },
+    "plugins": [
+      "expo-location",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id-here"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }

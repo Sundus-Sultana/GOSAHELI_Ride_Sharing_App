@@ -1,44 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  Modal, 
-  TouchableWithoutFeedback, 
-  Image, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TouchableWithoutFeedback,
+  Image,
   ActivityIndicator,
   Alert,
   Linking
 } from 'react-native';
 import { auth } from '../firebase/setup';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadProfilePhoto, getUserPhoto, getRideHistory } from '../../api.js';
+import { uploadProfilePhoto, getUserPhoto, getRideHistory,API_URL } from '../../api.js';
 
-const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
+const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,userName}) => {
   const [photoURL, setPhotoURL] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loadingRides, setLoadingRides] = useState(false);
 
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
 
   useEffect(() => {
-    const loadUserPhoto = async () => {
-      if (user?.email) {
-        try {
-          const response = await getUserPhoto(user.email);
-          if (response?.photo_url) {
-            setPhotoURL(response.photo_url);
-          }
-        } catch (error) {
-          console.error('Error loading user photo:', error);
-        }
+  if (!userId) return; // Add this check
+
+  const loadUserPhoto = async () => {
+    try {
+      const response = await getUserPhoto(userId);
+      console.log('Photo response:', response); // Debug
+      if (response?.photo_url) {
+        setPhotoURL(response.photo_url);
       }
-    };
-    
-    loadUserPhoto();
-  }, [user]);
+    } catch (error) {
+      console.error('Error loading user photo:', error);
+      setPhotoURL(null); // Explicitly set to null on error
+    }
+  };
+
+  loadUserPhoto();
+}, [userId]); // Depend on userId rather than user
+
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -69,7 +71,7 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
     try {
       setUploading(true);
       setUploadProgress(0);
-      
+
       const interval = setInterval(() => {
         setUploadProgress(prev => {
           const newProgress = prev + 10;
@@ -81,11 +83,11 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
         });
       }, 200);
 
-      const response = await uploadProfilePhoto(user.email, base64Image);
-      
+      const response = await uploadProfilePhoto(userId, base64Image);
+
       clearInterval(interval);
       setUploadProgress(100);
-      
+
       if (response?.success && response.photo_url) {
         setPhotoURL(response.photo_url);
         Alert.alert('Success', 'Profile photo updated!');
@@ -104,8 +106,8 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
     try {
       setLoadingRides(true);
       closeModal();
-      
-      const rideHistory = await getRideHistory(user.email);
+
+      const rideHistory = await getRideHistory(userId);
       navigation.navigate('History', { rideHistory });
     } catch (error) {
       console.error('Error fetching ride history:', error);
@@ -149,9 +151,9 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
   };
 
   return (
-    <Modal 
-      transparent={true} 
-      visible={visible} 
+    <Modal
+      transparent={true}
+      visible={visible}
       animationType="fade"
       onRequestClose={closeModal}
     >
@@ -159,16 +161,16 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
         <View style={styles.overlay}>
           <TouchableWithoutFeedback>
             <View style={styles.container}>
-              <TouchableOpacity 
-                style={styles.closeButton} 
+              <TouchableOpacity
+                style={styles.closeButton}
                 onPress={closeModal}
               >
                 <Text style={styles.closeText}>✕</Text>
               </TouchableOpacity>
 
               <View style={styles.profileSection}>
-                <TouchableOpacity 
-                  onPress={pickImage} 
+                <TouchableOpacity
+                  onPress={pickImage}
                   disabled={uploading}
                   activeOpacity={0.7}
                 >
@@ -180,25 +182,29 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                       </Text>
                     </View>
                   ) : photoURL ? (
-                    <Image 
-                      source={{ uri: `http://192.168.100.28:5000${photoURL}` }} 
+                    <Image
+                      source={{
+                        uri: photoURL.startsWith('/') ?
+                          `${API_URL}${photoURL}` : // Use your API_URL constant
+                          photoURL
+                      }}
                       style={styles.profileImage}
                     />
                   ) : (
                     <View style={styles.profileImagePlaceholder}>
                       <Text style={styles.profileInitial}>
-                        {displayName.charAt(0).toUpperCase()}
+                        {userName.charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
                 </TouchableOpacity>
 
-                
-                 <Text style={styles.profileHint}>
+
+                <Text style={styles.profileHint}>
                   {photoURL ? 'Tap to change photo' : 'Tap to add photo'}
                 </Text>
-                <Text style={styles.profileName}>{displayName}</Text>
-               
+                <Text style={styles.profileName}>{userName}</Text>
+
               </View>
 
               {loadingRides ? (
@@ -208,7 +214,7 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                 </View>
               ) : (
                 <>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.menuItem}
                     onPress={() => {
                       closeModal();
@@ -218,7 +224,7 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                     <Text style={styles.menuText}>Wallet</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.menuItem}
                     onPress={() => {
                       closeModal();
@@ -228,17 +234,17 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                     <Text style={styles.menuText}>Carpool</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.menuItem}
                     onPress={handleMyRidesPress}
                   >
                     <Text style={styles.menuText}>My Rides</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.menuItem}
                     /*onPress={handleSupportPress}*/
-                      onPress={() => {
+                    onPress={() => {
                       closeModal();
                       navigation.navigate('Support');
                     }}
@@ -246,7 +252,7 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                     <Text style={styles.menuText}>Support</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.menuItem}
                     onPress={() => {
                       closeModal();
@@ -258,22 +264,50 @@ const MenuOverlay = ({ visible, closeModal, navigation, user }) => {
                 </>
               )}
 
-              <TouchableOpacity 
-                style={styles.logoutButton} 
+              <TouchableOpacity
+                style={styles.logoutButton}
                 onPress={handleLogout}
               >
                 <Text style={styles.logoutText}>Logout</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.driverButton}
-                onPress={() => {
-                  closeModal();
-                  navigation.navigate('DriverApplication');
-                }}
+               onPress={async () => {
+  try {
+    closeModal();
+
+    const response = await fetch(`${API_URL}/become-driver`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }), // send userId to backend
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.driverId) {
+      navigation.navigate('DriverHome', {
+        userId,
+        userName,
+        user,
+        driverId: data.driverId, // ✅ send driverId to next screen
+      });
+    } else {
+      Alert.alert('Error', data.message || 'Failed to become a driver.');
+    }
+  } catch (error) {
+    console.error('Become driver error:', error);
+    Alert.alert('Error', 'Something went wrong. Please try again.');
+  }
+}}
+
               >
                 <Text style={styles.driverText}>Become a Driver</Text>
               </TouchableOpacity>
+
+
             </View>
           </TouchableWithoutFeedback>
         </View>

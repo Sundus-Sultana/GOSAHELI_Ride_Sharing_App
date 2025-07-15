@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  Image, 
-  TouchableOpacity, 
-  StyleSheet, 
-  TextInput, 
-  FlatList, 
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  FlatList,
   Modal,
   Alert,
   Linking,
@@ -18,16 +18,22 @@ import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import MenuOverlay from "../components/MenuOverlay";
 import { auth } from '../firebase/setup';
 import { getRideHistory } from '../../api.js';
+import SaheliLogo from '../../assets/IconWomen2.png';
+import { getUser } from '../../api';
 
 
-const Home = () => {
+
+const Home = ({ route }) => {
   const navigation = useNavigation();
+  const { userName, userId } = route.params || {};
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('BookRide');
   const [rideHistory, setRideHistory] = useState([]);
   const [showRating, setShowRating] = useState(false);
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
+  const [dbUser, setDbUser] = useState(null); // ✅ user from DB
+
 
 
   // Function to format currency as PKR
@@ -37,35 +43,42 @@ const Home = () => {
   };
 
   useEffect(() => {
+    const fetchUserData = async () => {
+      const email = auth.currentUser?.email;
+      if (!email) return;
+
+      try {
+        const userFromDB = await getUser(email);
+        if (userFromDB.length > 0) {
+          setDbUser(userFromDB[0]); // ✅ Set full user from DB
+        }
+      } catch (err) {
+        console.error('Error fetching user from DB:', err);
+      }
+    };
+
     const fetchRideHistory = async () => {
       try {
-        const userEmail = auth.currentUser?.email;
-        if (!userEmail) return;
-        
-        const history = await getRideHistory(userEmail);
+        const id = route.params?.userId || dbUser?.UserID;
+        if (!id) return;
+
+        const history = await getRideHistory(id);
         setRideHistory(history);
       } catch (error) {
         console.error('Error fetching ride history:', error);
       }
     };
 
+    fetchUserData();
     fetchRideHistory();
 
-
-
-
-
-
-
-
-
-    // Show rating prompt after 2 minutes
     const timer = setTimeout(() => {
       setShowRating(true);
     }, 12000);
 
     return () => clearTimeout(timer);
   }, []);
+
 
   const handleRating = (selectedRating) => {
     setRating(selectedRating);
@@ -74,7 +87,7 @@ const Home = () => {
   const submitRating = () => {
     setHasRated(true);
     setShowRating(false);
-    
+
     if (rating > 3) {
       // Open app store for positive ratings
       if (Platform.OS === 'ios') {
@@ -101,9 +114,10 @@ const Home = () => {
     }
   };
 
+
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'N/A';
-    
+
     try {
       const date = new Date(dateTimeString);
       return date.toLocaleString('en-US', {
@@ -123,15 +137,15 @@ const Home = () => {
     return (
       <View style={styles.starsContainer}>
         {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity 
-            key={star} 
+          <TouchableOpacity
+            key={star}
             onPress={() => handleRating(star)}
             activeOpacity={0.7}
           >
-            <MaterialIcons 
-              name={star <= rating ? 'star' : 'star-border'} 
-              size={40} 
-              color={star <= rating ? '#FFD700' : '#ccc'} 
+            <MaterialIcons
+              name={star <= rating ? 'star' : 'star-border'}
+              size={40}
+              color={star <= rating ? '#FFD700' : '#ccc'}
             />
           </TouchableOpacity>
         ))}
@@ -154,19 +168,22 @@ const Home = () => {
       </View>
 
       {/* Menu Overlay */}
-      <MenuOverlay 
-        visible={menuVisible} 
+      <MenuOverlay
+        visible={menuVisible}
         closeModal={() => setMenuVisible(false)}
-        user={auth.currentUser}
+        user={dbUser} // 👈 change here
         navigation={navigation}
+        userId={userId}
+        userName={userName}
       />
+
 
       {/* Image Slider */}
       <View style={styles.sliderContainer}>
-        <Swiper 
-          autoplay={true} 
-          autoplayTimeout={3} 
-          showsButtons={true} 
+        <Swiper
+          autoplay={true}
+          autoplayTimeout={3}
+          showsButtons={true}
           activeDotColor="#d63384"
           nextButton={<Text style={styles.sliderButton}>›</Text>}
           prevButton={<Text style={styles.sliderButton}>‹</Text>}
@@ -181,16 +198,16 @@ const Home = () => {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <MaterialIcons name="search" size={20} color="#d63384" />
-        <TextInput 
-          placeholder="Where would you go?" 
+        <TextInput
+          placeholder="Where would you go?"
           placeholderTextColor="#888"
-          style={styles.searchInput} 
+          style={styles.searchInput}
         />
       </View>
 
       {/* Transport & Delivery Toggle */}
       <View style={styles.toggleContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.toggleButton, activeTab === 'BookRide' && styles.activeToggle]}
           onPress={() => setActiveTab('BookRide')}
         >
@@ -199,12 +216,17 @@ const Home = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.toggleButton, activeTab === 'Carpool' && styles.activeToggle]}
           onPress={() => {
             setActiveTab('Carpool');
             setTimeout(() => {
-              navigation.navigate('Home');
+              navigation.navigate('Carpool', {
+                userName: userName || auth.currentUser?.displayName || 'User',
+                userEmail: auth.currentUser?.email,
+                userId: auth.currentUser?.uid,
+                riderId: route.params?.userId
+              });
             }, 100);
           }}
         >
@@ -215,7 +237,7 @@ const Home = () => {
       </View>
 
       {/* Ride History Section */}
-     
+
       {/* Ride History Section */}
       <View style={styles.historySection}>
         {rideHistory.length > 0 && (
@@ -229,7 +251,10 @@ const Home = () => {
 
         {rideHistory.length === 0 ? (
           <View style={styles.noRidesContainer}>
-            <Text style={styles.noRidesText}>No rides available</Text>
+            <Text style={styles.ridehistorytitle}>Your Ride History</Text>
+            <Text style={styles.emptyText}>
+              No rides found yet. Once you start booking rides, they'll appear here!
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -259,7 +284,7 @@ const Home = () => {
         )}
       </View>
 
- {/* Rating Modal */}
+      {/* Rating Modal */}
       <Modal
         transparent={true}
         visible={showRating && !hasRated}
@@ -270,22 +295,22 @@ const Home = () => {
           <View style={styles.ratingContainer}>
             <Text style={styles.ratingTitle}>Rate Your Experience</Text>
             <Text style={styles.ratingSubtitle}>How would you rate Saheli?</Text>
-            
+
             {renderStars()}
-            
+
             <Text style={styles.ratingText}>
               {rating > 0 ? `You selected: ${rating} star${rating > 1 ? 's' : ''}` : 'Tap a star to rate'}
             </Text>
-            
+
             <View style={styles.ratingButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.ratingButton, styles.ratingButtonSecondary]}
                 onPress={() => setShowRating(false)}
               >
                 <Text style={styles.ratingButtonTextSecondary}>Maybe Later</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[styles.ratingButton, styles.ratingButtonPrimary]}
                 onPress={submitRating}
                 disabled={rating === 0}
@@ -305,32 +330,35 @@ const Home = () => {
           <MaterialIcons name="home" size={25} color="#d63384" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}   onPress={() => navigation.navigate('Favourite')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
           <MaterialIcons name="favorite-border" size={25} color="#888" />
           <Text style={styles.navText}>Favorites</Text>
         </TouchableOpacity>
-        
+
         <View style={styles.navItem}></View>
-        
+
         <TouchableOpacity style={styles.navItem}
           onPress={() => navigation.navigate('Offers')}>
           <MaterialIcons name="local-offer" size={25} color="#888" />
           <Text style={styles.navText}>Offers</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.navItem}
           onPress={() => navigation.navigate('Profile')}
         >
           <MaterialIcons name="person" size={25} color="#888" />
           <Text style={styles.navText}>Profile</Text>
         </TouchableOpacity>
-        
-        {/* Wallet button */}
+
+        {/* Logo */}
         <TouchableOpacity style={styles.walletContainer}>
           <View style={styles.walletIcon}>
-            <MaterialIcons name="account-balance-wallet" size={25} color="#fff" />
-          </View>
-          <Text style={styles.walletText}>Wallet</Text>
+            <Image
+              source={SaheliLogo}
+              style={styles.walletImage}
+              resizeMode="contain"
+            />          </View>
+          <Text style={styles.walletText}>   </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -415,7 +443,7 @@ const styles = StyleSheet.create({
   toggleText: {
     fontWeight: "bold",
     fontSize: 16,
-    color:"#fff"
+    color: "#fff"
   },
   inactiveToggleText: {
     color: "#888",
@@ -446,11 +474,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 30,
   },
-  noRidesText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#888",
-    textAlign: "center",
+
+  ridehistorytitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 26,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#777',
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 20,
   },
   historyList: {
     paddingBottom: 20,
@@ -532,6 +569,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
   },
+  walletImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 30,
+    backgroundColor: '#d63384',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   walletText: {
     marginTop: 5,
     fontSize: 12,

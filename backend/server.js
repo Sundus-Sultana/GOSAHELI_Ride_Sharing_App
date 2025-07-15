@@ -1,206 +1,231 @@
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 5000;
-const { Client } = require('pg');
-const bcrypt = require('bcryptjs');
-const multer = require('multer');
+
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const client = require('./db');
 
-// PostgreSQL connection
-const client = new Client({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'postgres',
-  password: 'postgres',
-  port: 5432,
-});
+const carpoolRoutes = require('./routes/carpool');
+const uploadVehicleImage = require('./routes/uploadVehicleImage');
+const uploadLicense = require('./routes/uploadLicense');
 
-client.connect()
-  .then(() => console.log('Connected to PostgreSQL'))
-  .catch(err => console.error('Connection error', err.stack));
-
+app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Multer setup for image uploading
+// ========== Multer Config ==========
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadPath = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath);
-    }
+    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath);
     cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname);
-    const uniqueName = `${Date.now()}${ext}`;
-    cb(null, uniqueName);
+    cb(null, `${Date.now()}${ext}`);
   }
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage: storage });
 
-// Register Passenger
-app.post('/rider', async (req, res) => {
-  const { email, username, password } = req.body;
+
+// ========== ✅Routes ==========
+//  Become Driver
+const becomeDriverRoute = require('./routes/becomeDriver');
+app.use('/become-driver', becomeDriverRoute);
+
+//  Vehicle img url to uploads
+app.use('/api/carpool', carpoolRoutes);
+app.use('/Vehicle_Images', express.static(path.join(__dirname, 'Vehicle_Images')));
+app.use(uploadVehicleImage);
+
+//  License imges url to uploads
+app.use('/License_Images', express.static(path.join(__dirname, 'License_Images')));
+app.use(uploadLicense);
+
+
+// vehicle details in table
+const vehicleDetailsRoutes = require('./routes/vehicleDetails');
+app.use('/vehicleDetails', require('./routes/vehicleDetails'));
+
+
+
+
+
+
+//  Check if user exists
+app.post('/user/check-exists', async (req, res) => {
+  const { email, phoneNo } = req.body;
   try {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const result = await client.query(
-      'INSERT INTO rider (email, username, password) VALUES ($1, $2, $3) RETURNING *',
-      [email, username, hashedPassword]
-    );
-    res.status(201).json({
-      message: 'Account created successfully!',
-      user: result.rows[0],
-    });
-  } catch (error) {
-    console.error('Error saving user to DB:', error);
-    if (error.code === '23505') {
-      res.status(400).json({ message: 'Email already exists' });
-    } else {
-      res.status(500).json({ message: 'Error saving user to database' });
-    }
-  }
-});
-
-// Passenger Login
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const userResult = await client.query(
-      'SELECT * FROM rider WHERE email = $1',
-      [email]
-    );
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    }
-    const user = userResult.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    }
-    res.json({ success: true, name: user.username });
-  } catch (error) {
-    console.error('Error logging in:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// Fetch passenger
-app.get('/rider', async (req, res) => {
-  const { email } = req.query;
-  try {
-    const result = await client.query('SELECT * FROM rider WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      return res.status(404).json([]);
-    }
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching rider:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Update Password
-app.put('/update-password', async (req, res) => {
-  const { email, password } = req.body;
-  
-  try {
-    const result = await client.query(
-      'UPDATE rider SET password = $1 WHERE email = $2 RETURNING *',
-      [password, email]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (error) {
-    console.error('Error updating password:', error);
-    res.status(500).json({ message: 'Error updating password' });
-  }
-});
-
-// Get User Photo
-app.get('/get-user-photo', async (req, res) => {
-  const { email } = req.query;
-  try {
-    const result = await client.query('SELECT photo_url FROM rider WHERE email = $1', [email]);
-    if (result.rows.length === 0 || !result.rows[0].photo_url) {
-      return res.status(404).json({ photo_url: null });
-    }
-    res.json({ photo_url: result.rows[0].photo_url });
-  } catch (error) {
-    console.error('Error fetching user photo:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Upload profile photo
-app.post('/upload-profile-photo', upload.single('photo'), async (req, res) => {
-  const { email } = req.body;
-  const file = req.file;
-
-  if (!file) {
-    return res.status(400).json({ message: 'No file uploaded' });
-  }
-
-  try {
-    const photoUrl = `/uploads/${file.filename}`;
-
-    const result = await client.query(
-      'UPDATE rider SET photo_url = $1 WHERE email = $2 RETURNING *',
-      [photoUrl, email]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const emailResult = await client.query('SELECT 1 FROM "User" WHERE email = $1 LIMIT 1', [email]);
+    const phoneResult = await client.query('SELECT 1 FROM "User" WHERE phoneno = $1 LIMIT 1', [phoneNo]);
 
     res.json({
+      emailExists: emailResult.rows.length > 0,
+      phoneExists: phoneResult.rows.length > 0
+    });
+  } catch (err) {
+    console.error('Error checking user existence:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ✅ Register User
+app.post('/user', async (req, res) => {
+  const { email, username, password, phoneNo } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await client.query(
+      'INSERT INTO "User" (email, username, password, phoneNo) VALUES ($1, $2, $3, $4) RETURNING *',
+      [email, username, hashedPassword, phoneNo]
+    );
+    res.status(201).json({ message: 'User registered', user: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') {
+      res.status(400).json({ message: 'Email or Phone number already exists' });
+    } else {
+      res.status(500).json({ message: 'Registration failed' });
+    }
+  }
+});
+
+// ✅ Login
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Get user by email
+    const result = await client.query('SELECT * FROM "User" WHERE email = $1', [email]);
+
+    // Debug: Show result
+    console.log('User fetch result:', result.rows);
+
+    // Check if user exists
+    if (!result.rows.length) {
+      console.warn('❌ No user found for email:', email);
+      return res.status(401).json({ message: 'Invalid credentials (user not found)' });
+    }
+
+    const user = result.rows[0];
+
+    // Ensure password exists in DB
+    if (!user.password) {
+      console.error('❌ Password missing for user:', user);
+      return res.status(500).json({ message: 'Password missing in DB' });
+    }
+
+    // Compare password
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      console.warn('❌ Incorrect password for:', email);
+      return res.status(401).json({ message: 'Invalid credentials (wrong password)' });
+    }
+
+    // Respond with success and user info
+    res.json({
       success: true,
-      message: 'Profile photo updated successfully!',
-      photo_url: photoUrl
+      user: {
+        UserID: user.UserID,
+        username: user.username,
+        email: user.email
+      }
     });
 
   } catch (error) {
-    console.error('Error uploading photo:', error);
+    console.error('🔥 Login Error:', error);
+    res.status(500).json({ message: 'Server error during login' });
+  }
+});
+
+
+// ✅ Get user by email
+app.get('/user', async (req, res) => {
+  const { email } = req.query;
+  try {
+    const result = await client.query('SELECT * FROM "User" WHERE email = $1', [email]);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Fetch error' });
+  }
+});
+
+// ✅ Get user by UserID
+app.get('/user-by-id/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const result = await client.query(
+      'SELECT "username", "email", "photo_url" FROM "User" WHERE "UserID" = $1',
+      [userId]
+    );
+
+    if (result.rows.length > 0) {
+      res.json(result.rows[0]);
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching user by ID:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 
-
-
-
-
-//API endpoint to fetch ride history
-app.get('/api/rideHistory', async (req, res) => {
-  console.log('Received request with query:', req.query);
-  const { email } = req.query;
-  
-  if (!email) {
-    return res.status(400).json({ error: "Email parameter required" });
-  }
-
+// ✅ Forgot password
+app.put('/update-password', async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const result = await client.query(
-      'SELECT * FROM ride_history WHERE rider_email = $1 ORDER BY ride_date DESC',
-      [email]
-    );
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await client.query('UPDATE "User" SET password = $1 WHERE email = $2', [hashedPassword, email]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating password:', error);
+    res.status(500).json({ message: 'Update error' });
+  }
+});
+
+// ✅ Upload user profile photo
+app.post('/upload-profile-photo', upload.single('photo'), async (req, res) => {
+  const { userId } = req.body; // 👈 Changed from email to userId
+  const file = req.file;
+  if (!file) return res.status(400).json({ message: 'No file uploaded' });
+
+  const photoUrl = `/uploads/${file.filename}`;
+  try {
+    await client.query('UPDATE "User" SET photo_url = $1 WHERE "UserID" = $2', [photoUrl, userId]);
+    res.json({ success: true, photo_url: photoUrl });
+  } catch (error) {
+    console.error('Error saving profile photo:', error);
+    res.status(500).json({ message: 'Upload error' });
+  }
+});
+
+
+// ✅ Get user photo
+app.get('/get-user-photo/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const result = await client.query('SELECT photo_url FROM "User" WHERE "UserID" = $1', [userId]);
+    res.json({ photo_url: result.rows[0]?.photo_url || null });
+  } catch (error) {
+    console.error('Error fetching photo:', error);
+    res.status(500).json({ message: 'Fetch error' });
+  }
+});
+
+
+// ✅ Ride history
+app.get('/ride-history/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const result = await client.query('SELECT * FROM ride_History WHERE "UserID" = $1 ORDER BY ride_date DESC', [userId]);
     res.json(result.rows);
-  } catch (err) {
-    console.error('Error:', err);
-    res.status(500).json({ error: 'Database error' });
+  } catch (error) {
+    console.error('Error fetching ride history:', error);
+    res.status(500).json({ message: 'Failed to fetch ride history' });
   }
 });
 

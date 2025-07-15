@@ -4,15 +4,36 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import LandingActivity from './src/PaseengerScreens/LandingActivity';
 import Signup from './src/PaseengerScreens/Signup';
+import PhoneVerificationScreen from './src/PaseengerScreens/PhoneVerificationScreen';
+import CameraCapture from './src/PaseengerScreens/CameraCapture';
 import Login from './src/PaseengerScreens/Login';
 import ForgotPassword from './src/PaseengerScreens/ForgotPassword';
 import Home from './src/PaseengerScreens/Home';
+import Carpool from './src/PaseengerScreens/Carpool';
+import CarpoolProfile from './src/PaseengerScreens/CarpoolProfile';
+import ChatUI from './src/PaseengerScreens/ChatUI';
 import about from './src/PaseengerScreens/about';
 import Support from './src/PaseengerScreens/Support';
 import Favourite from './src/PaseengerScreens/Favourite';
 import Offers from './src/PaseengerScreens/Offers';
 import History from './src/PaseengerScreens/History';
 import Profile from './src/PaseengerScreens/Profile';
+
+
+
+/*Driver Screens*/
+import DriverHome from './src/DriverScreens/DriverHome';
+import DriverMenuOverlay from './src/components/DriverMenuOverlay';
+
+import DriverCarpoolMap from './src/DriverScreens/DriverCarpoolMap';
+import DriverCarpoolProfile from './src/DriverScreens/DriverCarpoolProfile';
+
+
+import OfferCarpool from './src/DriverScreens/OfferCarpool';
+import VehicleSetupScreen from './src/DriverScreens/VehicleSetupScreen';
+import UploadVehiclePictureScreen from './src/DriverScreens/UploadVehiclePictureScreen';
+import VehicleDetailsScreen from './src/DriverScreens/VehicleDetailsScreen';
+import LicensePictureScreen from './src/DriverScreens/LicensePictureScreen'
 
 const Stack = createStackNavigator();
 
@@ -22,15 +43,38 @@ export default function App() {
       <Stack.Navigator initialRouteName="LandingActivity">
         <Stack.Screen name="LandingActivity" component={LandingActivity} />
         <Stack.Screen name="Signup" component={Signup} />
+        <Stack.Screen name="PhoneVerificationScreen" component={PhoneVerificationScreen} />
+        <Stack.Screen name="CameraCapture" component={CameraCapture} />
         <Stack.Screen name="Login" component={Login} />
         <Stack.Screen name="ForgotPassword" component={ForgotPassword} /> 
         <Stack.Screen name="Home" component={Home} screenOptions={{ animation: 'slide_from_right', }} />
+        <Stack.Screen name="Carpool" component={Carpool} options={{
+          animation: 'slide_from_right',
+        }} />
+        <Stack.Screen name="CarpoolProfile" component={CarpoolProfile}/>
+
+        <Stack.Screen name="ChatUI" component={ChatUI} />
         <Stack.Screen name="History" component={History}/>
         <Stack.Screen name="Favourite" component={Favourite}/>
         <Stack.Screen name="Offers" component={Offers}/>
         <Stack.Screen name="Profile" component={Profile}/>
         <Stack.Screen name="about" component={about} />
         <Stack.Screen name="Support" component={Support}/>
+
+
+        {/*Driver Screens*/}
+        <Stack.Screen name="DriverHome" component={DriverHome}/>
+        <Stack.Screen name="DriverMenuOverlay" component={DriverMenuOverlay}/>
+
+        <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap}/>
+        <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile}/>
+
+
+        <Stack.Screen name="OfferCarpool" component={OfferCarpool}/>
+        <Stack.Screen name="VehicleSetupScreen" component={VehicleSetupScreen}/>
+        <Stack.Screen name="VehicleDetailsScreen" component={VehicleDetailsScreen}/>
+        <Stack.Screen name="UploadVehiclePictureScreen" component={UploadVehiclePictureScreen}/>
+        <Stack.Screen name="LicensePictureScreen" component={LicensePictureScreen}/>
 
 
       </Stack.Navigator>

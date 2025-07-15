@@ -1,674 +1,282 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, TextInput, TouchableOpacity, Text,
-  StyleSheet, FlatList, Alert, ScrollView,
-  Keyboard, Platform, ActivityIndicator, Dimensions
+  StyleSheet, View, Text, TouchableOpacity,
+  TextInput, FlatList, ActivityIndicator, Alert, Keyboard
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import axios from 'axios';
-import { MaterialIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
-export default function Carpool({ navigation }) {
-  const [sourceText, setSourceText] = useState('');
-  const [destText, setDestText] = useState('');
-  const [sourceCoord, setSourceCoord] = useState(null);
-  const [destCoord, setDestCoord] = useState(null);
-  const [routeCoords, setRouteCoords] = useState([]);
-  const [sourceSuggestions, setSourceSuggestions] = useState([]);
-  const [destSuggestions, setDestSuggestions] = useState([]);
-  const [locationPermission, setLocationPermission] = useState(false);
-  const [recentRoutes, setRecentRoutes] = useState([]);
-  const [isSourceFocused, setIsSourceFocused] = useState(false);
-  const [isDestFocused, setIsDestFocused] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
+const MAPBOX_TOKEN = 'pk.eyJ1Ijoic3VuZHVzc3VsdGFuYSIsImEiOiJjbWFzYXd6MXYwZHdjMnFzNW51OHFxbW1iIn0.3WX-TCF91Jh3Go-pjGwAOg';
+const BASE_FARE_PKR = 100;
+const PER_KM_RATE_PKR = 30;
+const bboxIslamabadRawalpindi = '72.8,33.4,73.3,33.9';
 
+// ✅ Smart English filter: not too strict
+const isMostlyEnglish = (text) => {
+  const englishChars = text.match(/[a-zA-Z]/g) || [];
+  const ratio = englishChars.length / text.length;
+  return ratio > 0.4;
+};
+
+const debounce = (func, delay) => {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), delay);
+  };
+};
+
+const Carpool = ({ route }) => {
+  // Receive but don't use riderId
+  const { riderId } = route.params;
   const mapRef = useRef(null);
-  const nominatimUrl = 'https://nominatim.openstreetmap.org/search';
-  const sourceInputRef = useRef(null);
-  const destInputRef = useRef(null);
+  const [pickup, setPickup] = useState(null);
+  const [dropoff, setDropoff] = useState(null);
+  const [pickupText, setPickupText] = useState('');
+  const [dropoffText, setDropoffText] = useState('');
+  const [pickupSuggestions, setPickupSuggestions] = useState([]);
+  const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
+  const [isPickupFocused, setIsPickupFocused] = useState(false);
+  const [isDropoffFocused, setIsDropoffFocused] = useState(false);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [price, setPrice] = useState(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const navigation = useNavigation();
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === 'granted');
-      
-      // Set default to Islamabad if no location available
-      if (!sourceCoord) {
-        setSourceCoord({
-          latitude: 33.6844,
-          longitude: 73.0479
-        });
-      }
-    })();
-  }, []);
-
-  const getCurrentLocation = async () => {
+  const fetchSuggestions = useCallback(debounce(async (text, isPickup) => {
+    if (!text || text.length < 2) return;
+    setSuggestionsLoading(true);
     try {
-      setLoading(true);
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
-      });
-      const coords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+      const commonFix = {
+        'iiui': 'international islamic university',
+        'sadqabad': 'sadiqabad'
       };
-      setSourceCoord(coords);
+      const fixedText = commonFix[text.toLowerCase()] || text;
 
-      try {
-        const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-          params: {
-            format: 'json',
-            lat: coords.latitude,
-            lon: coords.longitude,
-            countrycodes: 'pk',
-            addressdetails: 1
-          },
-          headers: {
-            'User-Agent': 'SaheliRide/1.0',
-            'Accept-Language': 'en',
-          },
-        });
-
-        if (res.data?.address) {
-          const address = res.data.address;
-          let displayName = '';
-          if (address.road) displayName += address.road + ', ';
-          if (address.neighbourhood) displayName += address.neighbourhood + ', ';
-          if (address.suburb) displayName += address.suburb + ', ';
-          if (address.city) displayName += address.city;
-          setSourceText(displayName || 'Current Location');
-        } else {
-          setSourceText('Current Location');
+      const mapbox = await axios.get(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(fixedText)}.json`, {
+        params: {
+          access_token: MAPBOX_TOKEN,
+          bbox: bboxIslamabadRawalpindi,
+          limit: 20,
+          autocomplete: true,
+          fuzzyMatch: true
         }
-      } catch {
-        setSourceText('Current Location');
-      }
-      setSourceSuggestions([]);
-      Keyboard.dismiss();
-    } catch (error) {
-      Alert.alert('Location Error', 'Failed to fetch current location. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const geocode = async (query) => {
-    try {
-      // Special handling for IIUI
-      if (query.toLowerCase().includes('iiui') || query.toLowerCase().includes('international islamic university')) {
-        return {
-          latitude: 33.7294,
-          longitude: 73.0931
-        };
-      }
-
-      const res = await axios.get(nominatimUrl, {
-        params: { 
-          q: query + ', Pakistan', 
-          format: 'json',
-          countrycodes: 'pk',
-          limit: 5
-        },
-        headers: { 
-          'User-Agent': 'SaheliRide/1.0', 
-          'Accept-Language': 'en' 
-        },
       });
 
-      if (res.data && res.data.length > 0) {
-        return {
-          latitude: parseFloat(res.data[0].lat),
-          longitude: parseFloat(res.data[0].lon),
-        };
+      let results = mapbox.data.features
+        .map(f => ({
+          display_name: f.text || f.place_name.split(',')[0],
+          lat: f.center[1],
+          lon: f.center[0],
+          relevance: f.relevance,
+          source: 'mapbox'
+        }))
+        .filter(r => r.display_name && isMostlyEnglish(r.display_name));
+
+      if (results.length < 3) {
+        const nomRes = await axios.get('https://nominatim.openstreetmap.org/search', {
+          params: {
+            q: fixedText,
+            format: 'json',
+            addressdetails: 1,
+            viewbox: '72.8,33.9,73.3,33.4',
+            bounded: 1,
+            countrycodes: 'pk',
+            limit: 10
+          },
+          headers: { 'User-Agent': 'YourApp/1.0' }
+        });
+
+        const nomResults = nomRes.data
+          .map(f => {
+            const name = f.address?.suburb || f.address?.neighbourhood || f.address?.road || f.address?.village || f.address?.city || f.display_name.split(',')[0];
+            return {
+              display_name: name,
+              lat: parseFloat(f.lat),
+              lon: parseFloat(f.lon),
+              relevance: 0.5,
+              source: 'nominatim'
+            };
+          })
+          .filter(r => r.display_name && isMostlyEnglish(r.display_name));
+
+        results = [...results, ...nomResults];
       }
-      return null;
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      return null;
+
+      const clean = [];
+      const seen = new Set();
+      for (const r of results) {
+        if (r.display_name && isMostlyEnglish(r.display_name) && !seen.has(r.display_name)) {
+          clean.push(r);
+          seen.add(r.display_name);
+        }
+      }
+
+      clean.sort((a, b) => b.relevance - a.relevance);
+      isPickup ? setPickupSuggestions(clean) : setDropoffSuggestions(clean);
+    } catch (err) {
+      console.warn('Suggestions error:', err);
+    } finally {
+      setSuggestionsLoading(false);
     }
+  }, 400), []);
+
+  const handleSelect = (item, isPickup) => {
+    const coords = { latitude: item.lat, longitude: item.lon };
+    if (isPickup) {
+      setPickup(coords);
+      setPickupText(item.display_name);
+      setPickupSuggestions([]);
+      setIsPickupFocused(false);
+    } else {
+      setDropoff(coords);
+      setDropoffText(item.display_name);
+      setDropoffSuggestions([]);
+      setIsDropoffFocused(false);
+    }
+    Keyboard.dismiss();
   };
 
-  const getRoute = async (src, dest) => {
-    if (!src || !dest) return;
-    
-    setLoading(true);
-    const url = `https://router.project-osrm.org/route/v1/driving/${src.longitude},${src.latitude};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson`;
-
+  const calculateRoute = async () => {
+    if (!pickup || !dropoff) return;
+    setRouteLoading(true);
     try {
-      const res = await axios.get(url);
-      const route = res.data.routes[0];
-      const coords = route.geometry.coordinates.map(c => ({
-        latitude: c[1],
-        longitude: c[0],
-      }));
-      setRouteCoords(coords);
-
-      const distanceKm = (route.distance / 1000).toFixed(1);
-      const durationMin = (route.duration / 60).toFixed(0);
-      
-      // Save to recent routes
-      if (sourceText && destText) {
-        setRecentRoutes(prev => [
-          { 
-            source: sourceText, 
-            destination: destText, 
-            distance: distanceKm,
-            duration: durationMin,
-            timestamp: Date.now() 
-          },
-          ...prev.slice(0, 4),
-        ]);
-      }
-
-      // Fit map to route
-      setTimeout(() => {
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates([src, dest], {
-            edgePadding: { 
-              top: 100, 
-              bottom: 100, 
-              left: 50, 
-              right: 50 
-            },
-            animated: true,
-          });
+      const res = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${pickup.longitude},${pickup.latitude};${dropoff.longitude},${dropoff.latitude}`, {
+        params: {
+          access_token: MAPBOX_TOKEN,
+          geometries: 'geojson'
         }
-      }, 500);
-    } catch (error) {
-      Alert.alert('Route Error', 'Could not calculate route. Please check your locations and try again.');
+      });
+      const coords = res.data.routes[0].geometry.coordinates.map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
+      setRouteCoords(coords);
+      const distKm = res.data.routes[0].distance / 1000;
+      setPrice(Math.round(BASE_FARE_PKR + distKm * PER_KM_RATE_PKR));
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 100, bottom: 100, left: 50, right: 50 },
+        animated: true
+      });
+    } catch (err) {
+      Alert.alert('Error', 'Could not calculate route');
     } finally {
-      setLoading(false);
+      setRouteLoading(false);
     }
   };
 
   useEffect(() => {
-    if (sourceCoord && destCoord) {
-      getRoute(sourceCoord, destCoord);
-    }
-  }, [sourceCoord, destCoord]);
-
-  const fetchSuggestions = async (text, setSuggestions) => {
-    if (text.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    
-    try {
-      const res = await axios.get(nominatimUrl, {
-        params: { 
-          q: text + ', Pakistan', 
-          format: 'json',
-          countrycodes: 'pk',
-          limit: 5
-        },
-        headers: { 
-          'User-Agent': 'SaheliRide/1.0', 
-          'Accept-Language': 'en' 
-        },
-      });
-      setSuggestions(res.data || []);
-    } catch (error) {
-      console.error('Suggestion fetch error:', error);
-      setSuggestions([]);
-    }
-  };
-
-  const renderSuggestionItem = (item, setField, setCoord, setSuggestions) => {
-    const address = item.display_name.split(',').slice(0, 3).join(',');
-    return (
-      <TouchableOpacity
-        style={styles.suggestionItem}
-        onPress={() => {
-          const coords = {
-            latitude: parseFloat(item.lat),
-            longitude: parseFloat(item.lon),
-          };
-          setField(address);
-          setCoord(coords);
-          setSuggestions([]);
-          Keyboard.dismiss();
-        }}
-      >
-        <MaterialIcons name="location-on" size={20} color="#555" />
-        <Text style={styles.suggestionText}>{address}</Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderRecentRouteItem = (route, index) => {
-    return (
-      <TouchableOpacity
-        key={index}
-        style={styles.recentRouteItem}
-        onPress={async () => {
-          setLoading(true);
-          const src = await geocode(route.source);
-          const dst = await geocode(route.destination);
-          if (src && dst) {
-            setSourceText(route.source);
-            setDestText(route.destination);
-            setSourceCoord(src);
-            setDestCoord(dst);
-          }
-          setLoading(false);
-        }}
-      >
-        <View style={styles.routeIcon}>
-          <FontAwesome name="history" size={16} color="#666" />
-        </View>
-        <View style={styles.routeInfo}>
-          <Text style={styles.routeText} numberOfLines={1}>
-            <Text style={{ fontWeight: 'bold' }}>From:</Text> {route.source}
-          </Text>
-          <Text style={styles.routeText} numberOfLines={1}>
-            <Text style={{ fontWeight: 'bold' }}>To:</Text> {route.destination}
-          </Text>
-          {route.distance && (
-            <Text style={styles.routeMeta}>
-              {route.distance} km • {route.duration} mins
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+    if (pickup && dropoff) calculateRoute();
+  }, [pickup, dropoff]);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Plan Your Carpooling</Text>
-      </View>
-
-      {/* Search Section */}
-      <View style={styles.searchContainer}>
-        {/* Source Input */}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputIcon}>
-            <MaterialIcons name="my-location" size={20} color="#d63384" />
-          </View>
-          <TextInput
-            ref={sourceInputRef}
-            placeholder="Pickup location"
-            placeholderTextColor="#888"
-            style={styles.input}
-            value={sourceText}
-            onChangeText={(text) => {
-              setSourceText(text);
-              fetchSuggestions(text, setSourceSuggestions);
-            }}
-            onFocus={() => {
-              setIsSourceFocused(true);
-              setIsDestFocused(false);
-            }}
-            onBlur={() => setIsSourceFocused(false)}
-          />
-          {sourceText ? (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={() => {
-                setSourceText('');
-                setSourceCoord(null);
-                setRouteCoords([]);
-              }}
-            >
-              <MaterialIcons name="clear" size={18} color="#888" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Destination Input */}
-        <View style={[styles.inputContainer, { marginTop: 8 }]}>
-          <View style={styles.inputIcon}>
-            <MaterialIcons name="location-on" size={20} color="#d63384" />
-          </View>
-          <TextInput
-            ref={destInputRef}
-            placeholder="Drop-off location"
-            placeholderTextColor="#888"
-            style={styles.input}
-            value={destText}
-            onChangeText={(text) => {
-              setDestText(text);
-              fetchSuggestions(text, setDestSuggestions);
-            }}
-            onFocus={() => {
-              setIsDestFocused(true);
-              setIsSourceFocused(false);
-            }}
-            onBlur={() => setIsDestFocused(false)}
-          />
-          {destText ? (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={() => {
-                setDestText('');
-                setDestCoord(null);
-                setRouteCoords([]);
-              }}
-            >
-              <MaterialIcons name="clear" size={18} color="#888" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Current Location Button */}
-        {isSourceFocused && !sourceText && locationPermission && (
-          <TouchableOpacity
-            style={styles.currentLocationButton}
-            onPress={getCurrentLocation}
-            disabled={loading}
-          >
-            <Ionicons name="locate" size={18} color="#d63384" />
-            <Text style={styles.currentLocationText}>Use current location</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Suggestions List */}
-        {(sourceSuggestions.length > 0 && isSourceFocused) && (
-          <View style={styles.suggestionsContainer}>
-            <FlatList
-              data={sourceSuggestions}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item }) =>
-                renderSuggestionItem(item, setSourceText, setSourceCoord, setSourceSuggestions)
-              }
-              keyboardShouldPersistTaps="always"
-            />
-          </View>
-        )}
-
-        {(destSuggestions.length > 0 && isDestFocused) && (
-          <View style={styles.suggestionsContainer}>
-            <FlatList
-              data={destSuggestions}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={({ item }) =>
-                renderSuggestionItem(item, setDestText, setDestCoord, setDestSuggestions)
-              }
-              keyboardShouldPersistTaps="always"
-            />
-          </View>
-        )}
-
-        {/* Swap Button */}
-        {sourceCoord && destCoord && (
-          <TouchableOpacity
-            style={styles.swapButton}
-            onPress={() => {
-              const tempText = sourceText;
-              const tempCoord = sourceCoord;
-              setSourceText(destText);
-              setSourceCoord(destCoord);
-              setDestText(tempText);
-              setDestCoord(tempCoord);
-            }}
-          >
-            <MaterialIcons name="swap-vert" size={24} color="#d63384" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Recent Routes */}
-      {recentRoutes.length > 0 && !(isSourceFocused || isDestFocused) && (
-        <View style={styles.recentRoutesContainer}>
-          <Text style={styles.sectionTitle}>Recent Routes</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {recentRoutes.map((route, index) => renderRecentRouteItem(route, index))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Map View */}
-      <View 
-        style={styles.mapContainer}
-        onLayout={() => setMapReady(true)}
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={{ latitude: 33.6844, longitude: 73.0479, latitudeDelta: 0.1, longitudeDelta: 0.1 }}
       >
-        {mapReady && (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={{
-              latitude: sourceCoord?.latitude || 33.6844,
-              longitude: sourceCoord?.longitude || 73.0479,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-            mapType="standard"
-            showsUserLocation={locationPermission}
-            showsMyLocationButton={false}
-            showsBuildings={true}
-            showsTraffic={false}
-            showsIndoors={true}
-            showsPointsOfInterest={true}
-            loadingEnabled={true}
-            loadingIndicatorColor="#d63384"
-          >
-            {sourceCoord && (
-              <Marker coordinate={sourceCoord} title="Pickup">
-                <View style={styles.marker}>
-                  <View style={[styles.markerPin, { backgroundColor: '#d63384' }]}>
-                    <MaterialIcons name="location-pin" size={20} color="white" />
-                  </View>
-                </View>
-              </Marker>
+        {pickup && <Marker coordinate={pickup} pinColor="green" />}
+        {dropoff && <Marker coordinate={dropoff} pinColor="red" />}
+        {routeCoords.length > 0 && <Polyline coordinates={routeCoords} strokeWidth={4} strokeColor="blue" />}
+      </MapView>
+
+      <View style={styles.searchBox}>
+        <TextInput
+          style={styles.input}
+          placeholder="Pickup location"
+          value={pickupText}
+          onChangeText={t => { setPickupText(t); fetchSuggestions(t, true); }}
+          onFocus={() => setIsPickupFocused(true)}
+        />
+        {isPickupFocused && (
+          <FlatList
+            data={pickupSuggestions}
+            keyExtractor={(_, i) => i.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity onPress={() => handleSelect(item, true)}>
+                <Text style={styles.item}>{item.display_name}</Text>
+              </TouchableOpacity>
             )}
-            
-            {destCoord && (
-              <Marker coordinate={destCoord} title="Drop-off">
-                <View style={styles.marker}>
-                  <View style={[styles.markerPin, { backgroundColor: '#28a745' }]}>
-                    <MaterialIcons name="location-pin" size={20} color="white" />
-                  </View>
-                </View>
-              </Marker>
+          />
+        )}
+
+        <TextInput
+          style={styles.input}
+          placeholder="Dropoff location"
+          value={dropoffText}
+          onChangeText={t => { setDropoffText(t); fetchSuggestions(t, false); }}
+          onFocus={() => setIsDropoffFocused(true)}
+        />
+        {isDropoffFocused && (
+          <FlatList
+            data={dropoffSuggestions}
+            keyExtractor={(_, i) => i.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity onPress={() => handleSelect(item, false)}>
+                <Text style={styles.item}>{item.display_name}</Text>
+              </TouchableOpacity>
             )}
-            
-            {routeCoords.length > 0 && (
-              <Polyline 
-                coordinates={routeCoords} 
-                strokeWidth={4} 
-                strokeColor="#d63384"
-              />
-            )}
-          </MapView>
+          />
         )}
       </View>
 
-      {/* Proceed Button */}
-      {sourceCoord && destCoord && !(isSourceFocused || isDestFocused) && (
-        <TouchableOpacity
-          style={styles.proceedButton}
-          onPress={() =>
-            navigation.navigate('CarpoolProfile', {
-              source: sourceCoord,
-              destination: destCoord,
-              sourceText,
-              destText,
-            })
-          }
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.proceedButtonText}>Create Profile</Text>
-          )}
-        </TouchableOpacity>
+      {price && (
+        <View style={styles.bottomBox}>
+          <Text style={styles.price}>Estimated Fare: {price} PKR</Text>
+          <TouchableOpacity style={styles.bookBtn} onPress={() => {
+  Alert.alert(
+    'Booked',
+    `Fare: ${price} PKR`,
+    [
+      {
+        text: 'OK',
+        onPress: () => navigation.navigate('CarpoolProfile',{
+        riderId: riderId , // Pass it forward
+        pickupLocation: pickupText,
+          dropoffLocation: dropoffText
+        })
+      }
+    ]
+  );
+}}>
+            {routeLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.bookText}>Book Ride</Text>}
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    paddingTop: 10,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  searchContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    height: 50,
-  },
-  inputIcon: {
-    marginRight: 10,
+  container: { flex: 1 },
+  map: { flex: 1 },
+  searchBox: {
+    position: 'absolute', top: 40, left: 10, right: 10,
+    backgroundColor: '#fff', padding: 10, borderRadius: 10,
+    zIndex: 10
   },
   input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    height: '100%',
+    height: 45,
+    borderColor: '#ccc', borderWidth: 1,
+    paddingHorizontal: 10, borderRadius: 5,
+    marginBottom: 8
   },
-  clearButton: {
-    padding: 5,
+  item: {
+    padding: 10, borderBottomColor: '#eee', borderBottomWidth: 1
   },
-  currentLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    marginTop: 5,
+  bottomBox: {
+    position: 'absolute', bottom: 30, left: 20, right: 20,
+    backgroundColor: '#fff', padding: 15, borderRadius: 10,
+    alignItems: 'center', elevation: 4
   },
-  currentLocationText: {
-    marginLeft: 10,
-    color: '#d63384',
-    fontSize: 16,
+  price: { fontSize: 18, marginBottom: 10 },
+  bookBtn: {
+    backgroundColor: '#28a745', padding: 12,
+    borderRadius: 8, width: '100%', alignItems: 'center'
   },
-  suggestionsContainer: {
-    maxHeight: 200,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    marginTop: 5,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  suggestionText: {
-    marginLeft: 10,
-    fontSize: 15,
-    color: '#333',
-  },
-  swapButton: {
-    position: 'absolute',
-    right: 25,
-    top: 75,
-    backgroundColor: '#fff',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  recentRoutesContainer: {
-    padding: 15,
-    backgroundColor: '#fff',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  recentRouteItem: {
-    width: 200,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 10,
-    padding: 15,
-    marginRight: 10,
-    flexDirection: 'row',
-  },
-  routeIcon: {
-    marginRight: 10,
-  },
-  routeInfo: {
-    flex: 1,
-  },
-  routeText: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 3,
-  },
-  routeMeta: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  mapContainer: {
-    flex: 1,
-    width: '100%',
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  marker: {
-    alignItems: 'center',
-  },
-  markerPin: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  proceedButton: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: '#d63384',
-    padding: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  proceedButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  bookText: { color: '#fff', fontWeight: 'bold' }
 });
+
+export default Carpool;
