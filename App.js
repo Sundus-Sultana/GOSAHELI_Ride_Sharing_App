@@ -57,7 +57,7 @@ export default function App() {
         }}   />
         <Stack.Screen name="CarpoolProfile" component={CarpoolProfile} options={{ headerShown: false }}/>
 
-        <Stack.Screen name="ChatUI" component={ChatUI} />
+        <Stack.Screen name="ChatUI" component={ChatUI} options={{ headerShown: false }}/>
         <Stack.Screen name="History" component={History} />
         <Stack.Screen name="Favourite" component={Favourite} />
         <Stack.Screen name="Offers" component={Offers} />
