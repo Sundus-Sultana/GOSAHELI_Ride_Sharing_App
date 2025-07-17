@@ -2,6 +2,10 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
+/* components*/
+import CustomBackButton from './src/components/CustomBackButton'; // ✅ Import
+
+
 import LandingActivity from './src/PaseengerScreens/LandingActivity';
 import Signup from './src/PaseengerScreens/Signup';
 import PhoneVerificationScreen from './src/PaseengerScreens/PhoneVerificationScreen';
@@ -41,13 +45,13 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="LandingActivity">
-        <Stack.Screen name="LandingActivity" component={LandingActivity} />
-        <Stack.Screen name="Signup" component={Signup} />
+        <Stack.Screen name="LandingActivity" component={LandingActivity} options={{ headerShown: false }}/>
+        <Stack.Screen name="Signup" component={Signup} options={{ headerShown: false }}/>
         <Stack.Screen name="PhoneVerificationScreen" component={PhoneVerificationScreen} />
         <Stack.Screen name="CameraCapture" component={CameraCapture} />
-        <Stack.Screen name="Login" component={Login} />
+        <Stack.Screen name="Login" component={Login} options={{ headerShown: false }}/>
         <Stack.Screen name="ForgotPassword" component={ForgotPassword} /> 
-        <Stack.Screen name="Home" component={Home} screenOptions={{ animation: 'slide_from_right', }} />
+        <Stack.Screen name="Home" component={Home} screenOptions={{ animation: 'slide_from_right', }} options={{ headerShown: false }}/>
         <Stack.Screen name="Carpool" component={Carpool} options={{
           animation: 'slide_from_right',
         }} />
@@ -63,18 +67,33 @@ export default function App() {
 
 
         {/*Driver Screens*/}
-        <Stack.Screen name="DriverHome" component={DriverHome}/>
+        <Stack.Screen name="DriverHome" component={DriverHome} options={{ headerShown: false }}/>
         <Stack.Screen name="DriverMenuOverlay" component={DriverMenuOverlay}/>
 
         <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap}/>
         <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile}/>
 
 
-        <Stack.Screen name="OfferCarpool" component={OfferCarpool}/>
-        <Stack.Screen name="VehicleSetupScreen" component={VehicleSetupScreen}/>
-        <Stack.Screen name="VehicleDetailsScreen" component={VehicleDetailsScreen}/>
-        <Stack.Screen name="UploadVehiclePictureScreen" component={UploadVehiclePictureScreen}/>
-        <Stack.Screen name="LicensePictureScreen" component={LicensePictureScreen}/>
+<Stack.Screen
+  name="OfferCarpool"
+  component={OfferCarpool}
+  options={{
+    headerStyle: {
+      backgroundColor: '#fff',
+    },
+    headerLeft: () => <CustomBackButton />, // ✅ Only show this
+    headerTitle: '', // Hides title
+    headerShadowVisible: false, // Optional: removes bottom border
+  }}
+/>
+
+        <Stack.Screen name="VehicleSetupScreen" component={VehicleSetupScreen}  options={{ headerShown: false }}/>
+        <Stack.Screen name="VehicleDetailsScreen" component={VehicleDetailsScreen} options={{headerStyle: {backgroundColor: '#fff',},  headerLeft: () => <CustomBackButton />,headerTitle: '', headerShadowVisible: false, }}/>
+        <Stack.Screen name="UploadVehiclePictureScreen" component={UploadVehiclePictureScreen} options={{headerStyle: {backgroundColor: '#fff',},  headerLeft: () => <CustomBackButton />,headerTitle: '', headerShadowVisible: false, }}/>
+        <Stack.Screen name="LicensePictureScreen" component={LicensePictureScreen} options={{headerStyle: {backgroundColor: '#fff',},  headerLeft: () => <CustomBackButton />,headerTitle: '', headerShadowVisible: false, }}/>
+
+
+
 
 
       </Stack.Navigator>

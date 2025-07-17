@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -54,7 +56,10 @@ export default function SetupVehicleScreen({ navigation, route }) {
       {/* Vehicle Details */}
       <TouchableOpacity
         style={styles.item}
-        onPress={() => navigation.navigate('VehicleDetailsScreen', { userId, driverId })}
+        onPress={() => navigation.navigate('VehicleDetailsScreen', {
+  userId: userId,
+  driverId: driverId, // 👈 Ensure this is defined and passed
+})}
       >
         <Text style={styles.itemText}>Vehicle details</Text>
         <View style={styles.rightIcons}>
@@ -71,7 +76,10 @@ export default function SetupVehicleScreen({ navigation, route }) {
       {/* Photo of vehicle */}
       <TouchableOpacity
         style={styles.item}
-        onPress={() => navigation.navigate('UploadVehiclePictureScreen', { userId, driverId })}
+        onPress={() => navigation.navigate('UploadVehiclePictureScreen', {
+  userId: userId,
+  driverId: driverId, // 👈 Ensure this is defined and passed
+})}
       >
         <Text style={styles.itemText}>Photo of vehicle</Text>
         <View style={styles.rightIcons}>
@@ -88,7 +96,8 @@ export default function SetupVehicleScreen({ navigation, route }) {
       {/* Driver License */}
       <TouchableOpacity
         style={styles.item}
-        onPress={() => navigation.navigate('LicensePictureScreen', { userId, driverId })}
+        onPress={() => navigation.navigate('LicensePictureScreen', { userId, driverId ,
+      refreshKey: Date.now(), })}
       >
         <Text style={styles.itemText}>Driver License</Text>
         <View style={styles.rightIcons}>

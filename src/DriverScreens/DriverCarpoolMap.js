@@ -8,6 +8,9 @@ import * as Location from 'expo-location';
 import axios from 'axios';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoic3VuZHVzc3VsdGFuYSIsImEiOiJjbWFzYXd6MXYwZHdjMnFzNW51OHFxbW1iIn0.3WX-TCF91Jh3Go-pjGwAOg';
 const BASE_FARE_PKR = 100;

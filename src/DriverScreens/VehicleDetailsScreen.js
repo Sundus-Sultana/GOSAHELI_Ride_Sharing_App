@@ -1,9 +1,12 @@
-// 📁 VehicleDetailsScreen.js
+// 📁 src/DriverScreens/VehicleDetailsScreen.js
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
 import { Modal, Portal, Provider, Searchbar } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 
@@ -26,6 +29,7 @@ const capacities = ['1', '2', '3', '4', '5', '6', '7'];
 const VehicleDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
   const { driverId } = route.params || {};
+console.log('driverId passed to screen:', driverId); // 👈 Add this for debugging
 
   const [modelVisible, setModelVisible] = useState(false);
   const [typeVisible, setTypeVisible] = useState(false);
@@ -43,29 +47,32 @@ const VehicleDetailsScreen = ({ route }) => {
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    if (!driverId) return;
+  if (!driverId) return;
 
-    const loadVehicle = async () => {
-      try {
-        const data = await getVehicleByDriverId(driverId);
-        if (data) {
-          setSelectedModel(data.VehicleModel);
-          setSelectedType(data.VehicleType);
-          setSelectedCapacity(data.capacity);
-          setColor(data.color);
-          setRegNo(data.PlateNumber);
-          setIsEditing(false);
-        } else {
-          setIsEditing(true); // No vehicle found → allow new input
-        }
-      } catch (err) {
-        Alert.alert('Error', 'Failed to load vehicle info.');
-        console.error(err);
+  const loadVehicle = async () => {
+    try {
+      const data = await getVehicleByDriverId(driverId);
+      console.log('Fetched vehicle data:', data); // 👈 Add this
+
+      if (data) {
+        setSelectedModel(data.VehicleModel);
+        setSelectedType(data.VehicleType);
+        setSelectedCapacity(data.capacity);
+        setColor(data.color);
+        setRegNo(data.PlateNumber);
+        setIsEditing(false);
+      } else {
+        setIsEditing(true); // If not found, allow edit mode
       }
-    };
+    } catch (err) {
+      Alert.alert('Error', 'Failed to load vehicle info.');
+      console.error(err);
+    }
+  };
 
-    loadVehicle();
-  }, [driverId]);
+  loadVehicle();
+}, [driverId]);
+
 
   const handleSaveOrUpdate = async () => {
     if (!selectedModel || !selectedType || !selectedCapacity || !color || !regNo) {
@@ -83,9 +90,10 @@ const VehicleDetailsScreen = ({ route }) => {
     };
 
     try {
+      const existing = await getVehicleByDriverId(driverId);
+
       if (isEditing) {
-        const data = await getVehicleByDriverId(driverId);
-        if (data) {
+        if (existing) {
           await updateVehicleDetails(driverId, payload);
           Alert.alert('Updated', 'Vehicle info updated successfully.');
         } else {
@@ -94,10 +102,10 @@ const VehicleDetailsScreen = ({ route }) => {
         }
         setIsEditing(false);
       } else {
-        setIsEditing(true); // Allow edit
+        setIsEditing(true);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Save/update error:', err);
       Alert.alert('Error', err.response?.data?.message || 'Failed to save.');
     }
   };

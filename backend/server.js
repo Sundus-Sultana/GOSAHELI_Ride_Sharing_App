@@ -41,16 +41,25 @@ app.use('/become-driver', becomeDriverRoute);
 //  Vehicle img url to uploads
 app.use('/api/carpool', carpoolRoutes);
 app.use('/Vehicle_Images', express.static(path.join(__dirname, 'Vehicle_Images')));
-app.use(uploadVehicleImage);
+app.use('/', uploadVehicleImage);
+app.use('/', require('./routes/uploadVehicleImage'));
+const uploadVehicleRoutes = require('./routes/uploadVehicleImage');
+app.use(uploadVehicleRoutes);
+
+
 
 //  License imges url to uploads
 app.use('/License_Images', express.static(path.join(__dirname, 'License_Images')));
 app.use(uploadLicense);
 
+const deleteLicenseImage = require('./routes/deleteLicenseImage');
+app.use('/', deleteLicenseImage);
+
 
 // vehicle details in table
 const vehicleDetailsRoutes = require('./routes/vehicleDetails');
-app.use('/vehicleDetails', require('./routes/vehicleDetails'));
+app.use('/vehicleDetails', vehicleDetailsRoutes);
+
 
 
 

@@ -4,6 +4,8 @@ import {
   ScrollView, TouchableOpacity, KeyboardAvoidingView,
   Platform, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
 import Constants from 'expo-constants';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import DateTimePickerModal from "react-native-modal-datetime-picker";

@@ -12,6 +12,10 @@ import {
   Linking,
   Platform,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Swiper from "react-native-swiper";
 import { useNavigation } from "@react-navigation/native";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
@@ -38,6 +42,24 @@ const DriverHome = ({ route }) => {
     if (amount === undefined || amount === null) return "PKR 0";
     return `PKR ${amount.toLocaleString("en-PK")}`;
   };
+
+
+  useFocusEffect(
+  React.useCallback(() => {
+    const onBackPress = () => {
+      Alert.alert('Exit App', 'Do you want to exit?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Exit', onPress: () => BackHandler.exitApp() },
+      ]);
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => subscription.remove(); // ✅ Use `.remove()` instead
+  }, [])
+);
+
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -120,6 +142,8 @@ const DriverHome = ({ route }) => {
   );
 
   return (
+     <SafeAreaView style={styles.safeArea}>
+    <StatusBar backgroundColor="#d63384" barStyle="light-content" />
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
@@ -319,12 +343,19 @@ const DriverHome = ({ route }) => {
              </TouchableOpacity>
            </View>
          </View>
+         </SafeAreaView>
   );
 };
 
 
 
 const styles = StyleSheet.create({
+  
+  safeArea: {
+  flex: 1,
+  backgroundColor: "#fff", // To match your header background
+},
+
   container: {
     flex: 1,
     backgroundColor: "#fff",
@@ -498,7 +529,7 @@ const styles = StyleSheet.create({
     borderColor: "#eee",
     backgroundColor: "#fff",
     position: "relative",
-    paddingBottom: 30,
+    paddingBottom: 10,
   },
   navItem: {
     alignItems: "center",
@@ -513,7 +544,7 @@ const styles = StyleSheet.create({
   },
   walletContainer: {
     position: "absolute",
-    bottom: 25,
+    bottom: 5,
     left: '50%',
     marginLeft: -30,
     alignItems: "center",

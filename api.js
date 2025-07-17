@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.15:5000';
+export const API_URL = 'http://192.168.100.22:5000';
 
 
 
@@ -106,32 +106,58 @@ export const saveCarpoolProfile = async (profileData) => {
 
 // ✅ Fetch vehicle info by DriverID
 export const getVehicleByDriverId = async (driverId) => {
+  const url = `${API_URL}/vehicleDetails/${driverId}`;
+  console.log('🌐 Fetching vehicle from URL:', url);
   try {
-    const res = await axios.get(`${API_URL}/vehicleDetails/${driverId}`);
-    return res.data;
-  } catch (err) {
-    if (err.response?.status === 404) return null;
-    throw err;
-  }
-};
-
-export const saveVehicleDetails = async (data) => {
-  try {
-    const res = await axios.post(`${API_URL}/vehicleDetails`, data);
-    return res.data;
-  } catch (err) {
-    throw err;
-  }
-};
-
-export const updateVehicleDetails = async (driverId, data) => {
-  try {
-    const res = await axios.put(`${API_URL}/vehicleDetails/${driverId}`, data);
-    return res.data;
-  } catch (err) {
-    throw err;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('⚠️ Vehicle fetch failed:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    console.log('✅ Vehicle data received:', data);
+    return data;
+  } catch (error) {
+    console.error('❌ Error fetching vehicle:', error);
+    return null;
   }
 };
 
 
+// ✅ Delete vehicle image by driverId
+export const deleteVehicleImage = async (driverId) => {
+  try {
+    const response = await fetch(`${API_URL}/delete-vehicle-image/${driverId}`, {
+      method: 'DELETE',
+    });
 
+    const text = await response.text(); // in case plain text is returned
+    const json = JSON.parse(text);      // will throw if not JSON
+
+    return json;
+  } catch (error) {
+    console.error('❌ Delete vehicle image error:', error);
+    return { success: false };
+  }
+};
+
+
+
+
+export const saveVehicleDetails = async (payload) => {
+  const response = await fetch(`${API_URL}/vehicleDetails`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return await response.json();
+};
+
+export const updateVehicleDetails = async (driverId, payload) => {
+  const response = await fetch(`${API_URL}/vehicleDetails/${driverId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return await response.json();
+};

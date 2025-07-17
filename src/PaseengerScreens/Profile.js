@@ -37,7 +37,7 @@ const Profile = ({ navigation }) => {
         const currentUser = auth.currentUser;
         if (currentUser) {
           // Fetch user data from PostgreSQL
-          const response = await axios.get(`http://192.168.100.15:5000/rider?email=${currentUser.email}`);
+          const response = await axios.get(`http://192.168.100.22:5000/rider?email=${currentUser.email}`);
           const userData = response.data[0];
           
           // Fetch user photo separately
@@ -66,7 +66,7 @@ const Profile = ({ navigation }) => {
       setUploading(true);
       
       // Update username in PostgreSQL
-      await axios.put('http://192.168.100.15:5000/update-profile', {
+      await axios.put('http://192.168.100.22:5000/update-profile', {
         email: user.email,
         username: user.name
       });
@@ -166,7 +166,7 @@ const Profile = ({ navigation }) => {
               </View>
             ) : user.photoUrl ? (
               <Image
-                source={{ uri: `http://192.168.100.15:5000${user.photoUrl}` }}
+                source={{ uri: `http://192.168.100.22:5000${user.photoUrl}` }}
                 style={styles.profileImage}
               />
             ) : (
