@@ -3,6 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
   TouchableWithoutFeedback, Platform, ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_URL } from '../../api.js';
@@ -27,6 +29,20 @@ export default function Registration({ navigation }) {
   const passwordRef = useRef(null);
   const confirmPasswordRef = useRef(null);
   const phoneRef = useRef(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('LandingActivity'); // ← Replace with your actual screen
+        return true;
+      };
+  
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+  
+      return () => subscription.remove();
+    }, [])
+  );
+  
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

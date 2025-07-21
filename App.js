@@ -22,7 +22,8 @@ import Favourite from './src/PaseengerScreens/Favourite';
 import Offers from './src/PaseengerScreens/Offers';
 import History from './src/PaseengerScreens/History';
 import Profile from './src/PaseengerScreens/Profile';
-
+        import SettingsScreen from './src/PaseengerScreens/SettingsScreen';
+        import ChangePassword from './src/PaseengerScreens/ChangePassword';
 
 
 /*Driver Screens*/
@@ -61,17 +62,20 @@ export default function App() {
         <Stack.Screen name="History" component={History} />
         <Stack.Screen name="Favourite" component={Favourite} />
         <Stack.Screen name="Offers" component={Offers} />
-        <Stack.Screen name="Profile" component={Profile} />
+        <Stack.Screen name="Profile" component={Profile}options={{ headerShown: false }} />
         <Stack.Screen name="about" component={about} />
         <Stack.Screen name="Support" component={Support} />
+<Stack.Screen name="SettingsScreen" component={SettingsScreen}options={{ headerShown: false }} />
+<Stack.Screen name="ChangePassword" component={ChangePassword} options={{ headerShown: false }} />
+
 
 
         {/*Driver Screens*/}
         <Stack.Screen name="DriverHome" component={DriverHome} options={{ headerShown: false }} />
         <Stack.Screen name="DriverMenuOverlay" component={DriverMenuOverlay} />
 
-        <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap} />
-        <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile} />
+        <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap} options={{ headerShown: false }}/>
+        <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile}  />
 
 
         <Stack.Screen

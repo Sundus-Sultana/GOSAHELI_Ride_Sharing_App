@@ -1,26 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TextInput, 
-  TouchableOpacity, 
-  Image,
-  Alert,
-  ActivityIndicator 
+import {
+  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
+  Image, Alert, ActivityIndicator
 } from 'react-native';
-import { 
-  MaterialIcons, 
-  FontAwesome5,
-  Ionicons 
-} from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase/setup';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadProfilePhoto, getUserPhoto } from '../../api.js';
+import { API_URL, uploadProfilePhoto, getUserPhoto,getUserById ,getDriverById} from '../../api.js';
 import axios from 'axios';
 
-const Profile = ({ navigation }) => {
+const Profile = ({ navigation, route }) => {
+  const { userId } = route.params || {};
   const [user, setUser] = useState({
     name: '',
     email: '',
@@ -30,25 +24,19 @@ const Profile = ({ navigation }) => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Fetch user data when component mounts
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          // Fetch user data from PostgreSQL
-          const response = await axios.get(`http://192.168.100.22:5000/rider?email=${currentUser.email}`);
-          const userData = response.data[0];
-          
-          // Fetch user photo separately
-          const photoResponse = await getUserPhoto(currentUser.email);
-          
-          setUser({
-            name: userData?.username || '',
-            email: currentUser.email,
-            photoUrl: photoResponse?.photo_url || null
-          });
-        }
+        const response = await axios.get(`${API_URL}/user-by-id/${userId}`);
+        const userData = response.data;
+
+        const photoResponse = await getUserPhoto(userId);
+
+        setUser({
+          name: userData?.username || '',
+          email: userData?.email || '',
+          photoUrl: photoResponse?.photo_url || null
+        });
       } catch (error) {
         console.error('Error fetching user data:', error);
       }
@@ -57,29 +45,73 @@ const Profile = ({ navigation }) => {
     fetchUserData();
   }, []);
 
+
+ useFocusEffect(
+  React.useCallback(() => {
+    const onBackPress = async () => {
+      try {
+        const res = await getUserById(userId);
+        const role = res?.last_role;
+        const userName = res?.username;
+
+        if (role === 'driver') {
+          // ✅ fetch driver ID from your backend API
+          const driverRes = await getDriverById(userId);
+          const driverId = driverRes?.data?.DriverID;
+
+          navigation.navigate('DriverHome', { userId, driverId });
+        } else {
+          navigation.navigate('Home', { userId, userName });
+        }
+      } catch (error) {
+        console.error('Error on hardware back press:', error);
+        navigation.navigate('Home', { userId }); // fallback
+      }
+
+      return true; // prevent default back
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [userId])
+);
+
+
   const handleEdit = () => {
     setIsEditing(!isEditing);
   };
 
-  const handleUpdate = async () => {
-    try {
-      setUploading(true);
-      
-      // Update username in PostgreSQL
-      await axios.put('http://192.168.100.22:5000/update-profile', {
-        email: user.email,
-        username: user.name
-      });
+ const handleUpdate = async () => {
+  try {
+    setUploading(true);
+    await axios.put(`${API_URL}/update-profile`, {
+      userId: userId,
+      username: user.name,
+      email: user.email,
+      photoUrl: user.photoUrl
+    });
 
-      Alert.alert('Success', 'Profile updated successfully');
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
-    } finally {
-      setUploading(false);
+    // ✅ Re-fetch updated user info
+    const updatedUser = await getUserById(userId);
+
+    if (updatedUser) {
+      setUser((prev) => ({
+        ...prev,
+        name: updatedUser.username,
+        email: updatedUser.email,
+      }));
     }
-  };
+
+    Alert.alert('Success', 'Profile updated successfully');
+    setIsEditing(false);
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    Alert.alert('Error', 'Failed to update profile');
+  } finally {
+    setUploading(false);
+  }
+};
+
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -97,30 +129,28 @@ const Profile = ({ navigation }) => {
         base64: true,
       });
 
-      if (!result.canceled && result.assets && result.assets[0].base64) {
+      if (!result.canceled && result.assets?.[0]?.base64) {
         setUploading(true);
         setUploadProgress(0);
-        
-        // Simulate upload progress
+
         const interval = setInterval(() => {
-          setUploadProgress(prev => {
-            const newProgress = prev + 10;
-            if (newProgress >= 100) {
+          setUploadProgress((prev) => {
+            const next = prev + 10;
+            if (next >= 100) {
               clearInterval(interval);
               return 100;
             }
-            return newProgress;
+            return next;
           });
         }, 200);
 
-        // Upload the photo
-        const response = await uploadProfilePhoto(user.email, result.assets[0].base64);
-        
+        const response = await uploadProfilePhoto(userId, result.assets[0].base64);
+
         clearInterval(interval);
         setUploadProgress(100);
-        
+
         if (response?.success && response.photo_url) {
-          setUser({...user, photoUrl: response.photo_url});
+          setUser((prev) => ({ ...prev, photoUrl: response.photo_url }));
           Alert.alert('Success', 'Profile photo updated!');
         } else {
           Alert.alert('Error', 'Failed to update profile photo.');
@@ -135,118 +165,155 @@ const Profile = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Profile</Text>
-        <TouchableOpacity onPress={isEditing ? handleUpdate : handleEdit}>
-          <Text style={styles.editText}>
-            {isEditing ? uploading ? 'Saving...' : 'Save' : 'Edit'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar backgroundColor="#d63384" barStyle="light-content" />
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+         <TouchableOpacity onPress={async () => {
+  try {
+    const res = await getUserById(userId);
+    const role = res?.last_role;
+    const userName = res?.username;
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Profile Picture Section */}
-        <View style={styles.profileSection}>
-          <TouchableOpacity 
-            onPress={isEditing ? pickImage : null}
-            disabled={!isEditing || uploading}
-            activeOpacity={0.7}
-          >
-            {uploading ? (
-              <View style={styles.profileImageLoading}>
-                <ActivityIndicator size="large" color="#d63384" />
-                <Text style={styles.uploadProgressText}>
-                  {Math.round(uploadProgress)}%
-                </Text>
-              </View>
-            ) : user.photoUrl ? (
-              <Image
-                source={{ uri: `http://192.168.100.22:5000${user.photoUrl}` }}
-                style={styles.profileImage}
-              />
-            ) : (
-              <View style={styles.profileImagePlaceholder}>
-                <Text style={styles.profileInitial}>
-                  {user.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            {isEditing && !uploading && (
-              <View style={styles.cameraIcon}>
-                <MaterialIcons name="camera-alt" size={24} color="#fff" />
-              </View>
-            )}
+    if (role === 'driver') {
+      const driverRes = await getDriverById(userId);
+      const driverId = driverRes?.data?.DriverID;
+
+      navigation.navigate('DriverHome', { userId, driverId });
+    } else {
+      navigation.navigate('Home', { userId, userName });
+    }
+  } catch (error) {
+    console.error('Error on header back press:', error);
+    navigation.navigate('Home', { userId }); // fallback
+  }
+}}>
+  <Ionicons name="arrow-back" size={24} color="#fff" />
+</TouchableOpacity>
+
+
+          <Text style={styles.headerTitle}>My Profile</Text>
+          <TouchableOpacity onPress={isEditing ? handleUpdate : handleEdit}>
+            <Text style={styles.editText}>
+              {isEditing ? (uploading ? 'Saving...' : 'Save') : 'Edit'}
+            </Text>
           </TouchableOpacity>
-          <Text style={styles.profileName}>{user.name}</Text>
         </View>
 
-        {/* Profile Information */}
-        <View style={styles.infoContainer}>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="person" size={24} color="#d63384" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Full Name</Text>
-              {isEditing ? (
-                <TextInput
-                  style={styles.input}
-                  value={user.name}
-                  onChangeText={(text) => setUser({...user, name: text})}
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* Profile Picture */}
+          <View style={styles.profileSection}>
+            <TouchableOpacity
+              onPress={isEditing ? pickImage : null}
+              disabled={!isEditing || uploading}
+              activeOpacity={0.7}
+            >
+              {uploading ? (
+                <View style={styles.profileImageLoading}>
+                  <ActivityIndicator size="large" color="#d63384" />
+                  <Text style={styles.uploadProgressText}>{Math.round(uploadProgress)}%</Text>
+                </View>
+              ) : user.photoUrl ? (
+                <Image
+                  source={{ uri: `${API_URL}${user.photoUrl}` }}
+                  style={styles.profileImage}
                 />
               ) : (
-                <Text style={styles.infoValue}>{user.name}</Text>
+                <View style={styles.profileImagePlaceholder}>
+                  <Text style={styles.profileInitial}>
+                    {user.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
               )}
+              {isEditing && !uploading && (
+                <View style={styles.cameraIcon}>
+                  <MaterialIcons name="camera-alt" size={24} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+            <Text style={styles.profileName}>{user.name}</Text>
+          </View>
+
+          {/* Profile Info */}
+          <View style={styles.infoContainer}>
+            <View style={styles.infoItem}>
+              <MaterialIcons name="person" size={24} color="#d63384" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Full Name</Text>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.input}
+                    value={user.name}
+                    onChangeText={(text) => setUser({ ...user, name: text })}
+                  />
+                ) : (
+                  <Text style={styles.infoValue}>{user.name}</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.infoItem}>
+              <MaterialIcons name="email" size={24} color="#d63384" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Email</Text>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.input}
+                    value={user.email}
+                    onChangeText={(text) => setUser({ ...user, email: text })}
+                  />
+                ) : (
+                  <Text style={styles.infoValue}>{user.email}</Text>
+                )}
+              </View>
             </View>
           </View>
 
-          <View style={styles.infoItem}>
-            <MaterialIcons name="email" size={24} color="#d63384" />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{user.email}</Text>
-            </View>
+          {/* Placeholder options */}
+          <View style={styles.optionsContainer}>
+            {[
+              ['payment', 'Payment Methods'],
+              ['settings', 'Settings'],
+              ['help', 'Help Center'],
+            ].map(([icon, label]) => (
+              <TouchableOpacity
+  key={label}
+  style={styles.optionItem}
+  onPress={() => {
+    if (label === 'Settings') {
+      navigation.navigate('SettingsScreen', { userId });
+    } else {
+      Alert.alert('Coming Soon', `${label} screen is not implemented yet.`);
+    }
+  }}
+>
+  <MaterialIcons name={icon} size={24} color="#d63384" />
+  <Text style={styles.optionText}>{label}</Text>
+  <MaterialIcons name="chevron-right" size={24} color="#888" />
+</TouchableOpacity>
+
+            ))}
           </View>
-        </View>
 
-        {/* Additional Options */}
-        <View style={styles.optionsContainer}>
-          <TouchableOpacity style={styles.optionItem}>
-            <MaterialIcons name="payment" size={24} color="#d63384" />
-            <Text style={styles.optionText}>Payment Methods</Text>
-            <MaterialIcons name="chevron-right" size={24} color="#888" />
+          {/* Logout */}
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => auth.signOut().then(() => navigation.replace('Login'))}
+          >
+            <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
-
-
-          <TouchableOpacity style={styles.optionItem}>
-            <MaterialIcons name="settings" size={24} color="#d63384" />
-            <Text style={styles.optionText}>Settings</Text>
-            <MaterialIcons name="chevron-right" size={24} color="#888" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.optionItem}>
-            <MaterialIcons name="help" size={24} color="#d63384" />
-            <Text style={styles.optionText}>Help Center</Text>
-            <MaterialIcons name="chevron-right" size={24} color="#888" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={() => auth.signOut().then(() => navigation.replace('Login'))}
-        >
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -284,10 +351,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 30,
-  },
-  profileImageContainer: {
-    position: 'relative',
-    marginBottom: 15,
   },
   profileImage: {
     width: 120,
@@ -334,6 +397,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#2B2B52',
+    marginTop: 10,
   },
   infoContainer: {
     backgroundColor: '#fff',

@@ -1,231 +1,303 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Image, Alert
+  View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL, getVehicleByDriverId, deleteVehicleImage } from '../../api';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { API_URL, getVehicleByDriverId } from '../../api';
 
-const UploadVehiclePictureScreen = ({ route }) => {
+const LicensePictureScreen = ({ route }) => {
   const navigation = useNavigation();
-  const { userId, driverId } = route.params || {};
+  const { userId, driverId, refreshKey } = route.params || {};
+  const [frontImageUri, setFrontImageUri] = useState(null);
+  const [backImageUri, setBackImageUri] = useState(null);
+  const [frontImageUrl, setFrontImageUrl] = useState('');
+  const [backImageUrl, setBackImageUrl] = useState('');
+  const [deletingSide, setDeletingSide] = useState(null);
 
-  const [imageUri, setImageUri] = useState(null);
-  const [initialImageUri, setInitialImageUri] = useState(null);
-  const [isEditMode, setIsEditMode] = useState(true); // default true
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('VehicleSetupScreen', { driverId: driverId, userId: userId, });
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => subscription.remove(); // Clean up on unmount
+    }, [])
+  );
+
+  const fetchImages = async () => {
+    console.log('🔁 LicensePictureScreen focused. Fetching vehicle data...');
+    if (!driverId) {
+      console.warn('⚠️ No driverId provided');
+      return;
+    }
+
+    try {
+      const vehicle = await getVehicleByDriverId(driverId);
+      console.log('✅ Vehicle data received:', vehicle);
+
+      if (!vehicle) {
+        console.warn('⚠️ No vehicle found for this driverId:', driverId);
+        return;
+      }
+
+      const timestamp = Date.now();
+      const fullFront = vehicle.license_front_url
+        ? `${API_URL}${vehicle.license_front_url}?t=${timestamp}`
+        : null;
+      const fullBack = vehicle.license_back_url
+        ? `${API_URL}${vehicle.license_back_url}?t=${timestamp}`
+        : null;
+
+      setFrontImageUri(fullFront);
+      setFrontImageUrl(fullFront || '');
+      setBackImageUri(fullBack);
+      setBackImageUrl(fullBack || '');
+    } catch (err) {
+      console.error('❌ Error fetching vehicle data:', err);
+    }
+  };
 
   useEffect(() => {
-    const loadImage = async () => {
-      if (!driverId) return;
-      const vehicleData = await getVehicleByDriverId(driverId);
-      if (vehicleData?.vehicle_url) {
-        const fullUrl = `${API_URL}${vehicleData.vehicle_url}?t=${Date.now()}`;
-        setImageUri(fullUrl);
-        setInitialImageUri(fullUrl);
-        setIsEditMode(false); // disable editing until user clicks edit
-      }
-    };
-    loadImage();
-  }, [driverId]);
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('📌 Navigation focus triggered. Fetching images...');
+      fetchImages();
+    });
 
-  const handleImagePick = async () => {
-    if (!isEditMode) return;
+    return unsubscribe;
+  }, [navigation]);
+
+  const pickImage = async (side) => {
+    const { granted: cameraGranted } = await ImagePicker.requestCameraPermissionsAsync();
+    const { granted: mediaGranted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!cameraGranted || !mediaGranted) {
+      Alert.alert('Permission Denied', 'Camera and media library access is required.');
+      return;
+    }
 
     Alert.alert('Select Image Source', '', [
       {
         text: 'Camera',
         onPress: async () => {
-          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
-          if (!result.canceled) setImageUri(result.assets[0].uri);
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
+          });
+          if (!result.canceled && result.assets?.length > 0) {
+            handleUpload(result.assets[0].uri, side);
+          }
         },
       },
       {
         text: 'Gallery',
         onPress: async () => {
-          const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.7 });
-          if (!result.canceled) setImageUri(result.assets[0].uri);
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const handleDeleteImage = async () => {
-    Alert.alert('Confirm Deletion', 'Are you sure you want to delete this image?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const result = await deleteVehicleImage(driverId);
-            if (result.success) {
-              setImageUri(null);
-              setInitialImageUri(null);
-              setIsEditMode(true); // ✅ allow user to pick new image
-              Alert.alert('Deleted', 'Image deleted successfully');
-            } else {
-              Alert.alert('Error', 'Failed to delete image');
-            }
-          } catch (err) {
-            console.error('Delete Error:', err);
-            Alert.alert('Error', 'Something went wrong');
-          }
-        },
-      },
-    ]);
-  };
-
-  const uploadImage = async () => {
-    if (!imageUri || imageUri === initialImageUri) return;
-
-    Alert.alert('Confirm Upload', 'Do you want to update this vehicle image?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Upload',
-        onPress: async () => {
-          const uriParts = imageUri.split('.');
-          const fileType = uriParts[uriParts.length - 1];
-
-          const formData = new FormData();
-          formData.append('vehicleImage', {
-            uri: imageUri,
-            name: `vehicle.${fileType}`,
-            type: `image/${fileType}`,
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
           });
-          formData.append('driverId', driverId);
-
-          try {
-            const response = await fetch(`${API_URL}/upload-vehicle-image`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'multipart/form-data' },
-              body: formData,
-            });
-
-            const raw = await response.text();
-            const data = JSON.parse(raw);
-
-            if (data.imageUrl) {
-              await AsyncStorage.setItem('vehiclePhotoUploaded', 'true');
-              Alert.alert('Success', 'Vehicle photo updated successfully');
-              navigation.goBack();
-            } else {
-              Alert.alert('Error', 'Failed to upload image');
-            }
-          } catch (error) {
-            console.error('Upload Error:', error);
-            Alert.alert('Error', 'Upload failed');
+          if (!result.canceled && result.assets?.length > 0) {
+            handleUpload(result.assets[0].uri, side);
           }
         },
       },
+      { text: 'Cancel', style: 'cancel' },
     ]);
+  };
+
+  const handleUpload = async (uri, side) => {
+    const fileType = uri.split('.').pop();
+    const formData = new FormData();
+    formData.append('licenseImage', {
+      uri,
+      name: `license_${Date.now()}.${fileType}`,
+      type: `image/${fileType}`,
+    });
+    formData.append('driverId', driverId);
+    formData.append('side', side);
+
+    try {
+      const res = await fetch(`${API_URL}/upload-license`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        if (data?.imageUrl) {
+          await fetchImages();
+        } else {
+          Alert.alert('Upload Failed', 'No image URL returned');
+        }
+      } catch (jsonErr) {
+        console.error('Unexpected non-JSON response:', text);
+        Alert.alert('Upload Failed', 'Server returned invalid response');
+      }
+
+    } catch (err) {
+      console.error('Upload error:', err);
+      Alert.alert('Upload Failed', 'Something went wrong during upload.');
+    }
+  };
+
+  const deleteLicenseImage = (side) => {
+    Alert.alert(
+      'Are you sure?',
+      `Do you want to delete the ${side} side image?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingSide(side);
+              const res = await axios.delete(`${API_URL}/delete-license-image`, {
+                data: { driverId, side },
+              });
+
+              if (res.data.success) {
+                await fetchImages();
+                Alert.alert('Success', 'Image deleted successfully');
+              } else {
+                Alert.alert('Failed', 'Image deletion failed');
+              }
+            } catch (err) {
+              console.error('Delete image error:', err);
+              Alert.alert('Error', 'Failed to delete image from server');
+            } finally {
+              setDeletingSide(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSave = async () => {
+    if (!frontImageUrl || !backImageUrl) {
+      Alert.alert('Missing', 'Please upload both front and back license images.');
+      return;
+    }
+
+    await AsyncStorage.setItem('licenseUploaded', 'true');
+    Alert.alert('Success', 'License images saved successfully.');
+    navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Upload Vehicle Picture</Text>
-      <Text style={styles.note}>Your front side & number plate should be clearly visible</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar backgroundColor="#d63384" barStyle="light-content" />
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Upload License Photos</Text>
 
-      <TouchableOpacity
-  style={styles.imageContainer}
-  onPress={handleImagePick}
-  disabled={!isEditMode && !!imageUri}
->
+        <TouchableOpacity style={styles.imagePlaceholder} onPress={() => pickImage('front')}>
+          {frontImageUri ? (
+            <>
+              <Image source={{ uri: frontImageUri }} style={styles.image} />
+              <TouchableOpacity
+                style={styles.deleteIcon}
+                onPress={() => deleteLicenseImage('front')}
+                disabled={deletingSide === 'front'}
+              >
+                {deletingSide === 'front' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <MaterialIcons name="delete" size={24} color="#D64584" />
+                )}
+              </TouchableOpacity>
+              <MaterialIcons name="edit" size={28} color="#D64584" style={styles.editIcon} />
+            </>
+          ) : (
+            <>
+              <MaterialIcons name="add-a-photo" size={40} color="#888" />
+              <Text style={styles.label}>Front Side</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-        {imageUri ? (
-  <>
-    <Image source={{ uri: imageUri }} style={styles.uploadedImage} />
+        <TouchableOpacity style={styles.imagePlaceholder} onPress={() => pickImage('back')}>
+          {backImageUri ? (
+            <>
+              <Image source={{ uri: backImageUri }} style={styles.image} />
+              <TouchableOpacity
+                style={styles.deleteIcon}
+                onPress={() => deleteLicenseImage('back')}
+                disabled={deletingSide === 'back'}
+              >
+                {deletingSide === 'back' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <MaterialIcons name="delete" size={24} color="#D64584" />
+                )}
+              </TouchableOpacity>
+              <MaterialIcons name="edit" size={28} color="#D64584" style={styles.editIcon} />
+            </>
+          ) : (
+            <>
+              <MaterialIcons name="add-a-photo" size={40} color="#888" />
+              <Text style={styles.label}>Back Side</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-    {/* ✏️ Edit */}
-    <TouchableOpacity style={styles.editIcon} onPress={() => setIsEditMode(true)}>
-      <MaterialIcons name="edit" size={24} color="#fff" />
-    </TouchableOpacity>
-
-    {/* 🗑️ Delete */}
-    <TouchableOpacity style={styles.deleteIcon} onPress={handleDeleteImage}>
-      <MaterialIcons name="delete" size={24} color="#fff" />
-    </TouchableOpacity>
-  </>
-) : (
-  <TouchableOpacity
-    style={styles.emptyImageTouchable}
-    onPress={handleImagePick}
-  >
-    <MaterialIcons name="add-a-photo" size={40} color="#888" />
-    <Text style={styles.uploadText}>Take or Select Photo</Text>
-  </TouchableOpacity>
-)}
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[
-          styles.saveButton,
-          (!imageUri || imageUri === initialImageUri) && { backgroundColor: '#ccc' },
-        ]}
-        onPress={uploadImage}
-        disabled={!imageUri || imageUri === initialImageUri}
-      >
-        <Text style={styles.saveButtonText}>UPDATE</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={[styles.saveButton, !(frontImageUri && backImageUri) && { backgroundColor: '#ccc' }]}
+          onPress={handleSave}
+          disabled={!(frontImageUri && backImageUri)}
+        >
+          <Text style={styles.saveText}>SAVE</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: '#fff', flex: 1 },
-  header: { fontSize: 22, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-  note: { fontSize: 15, marginBottom: 20, color: '#444' },
-  imageContainer: {
-    height: 200,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#D64584',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    overflow: 'hidden',
-    position: 'relative',
+
+  safeArea: { flex: 1, backgroundColor: "#fff", },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff', justifyContent: 'center' },
+  title: { fontSize: 25, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
+  imagePlaceholder: {
+    width: 350, height: 250, borderRadius: 10, borderWidth: 2, borderStyle: 'dashed',
+    borderColor: '#D64584', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#f8f8f8', margin: 10
   },
-  uploadedImage: { width: '100%', height: '100%', resizeMode: 'cover', borderRadius: 10 },
-  emptyImageTouchable: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-    width: '100%',
+  image: { width: '100%', height: '100%', borderRadius: 10 },
+  label: { marginTop: 8, color: '#666', fontSize: 16 },
+  saveButton: { backgroundColor: '#D64584', padding: 16, borderRadius: 10, alignItems: 'center' },
+  saveText: { color: '#fff', fontSize: 18 },
+  deleteIcon: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#fff',
+    padding: 5,
+    borderRadius: 20,
+    zIndex: 10,
   },
-  uploadText: { color: '#888', fontSize: 16, marginTop: 10 },
   editIcon: {
     position: 'absolute',
     bottom: 10,
-    right: 50,
-    backgroundColor: '#D64584',
-    borderRadius: 20,
-    padding: 4,
-    zIndex: 10,
-  },
-  deleteIcon: {
-    position: 'absolute',
-    bottom: 10,
     right: 10,
-    backgroundColor: '#D64584',
+    backgroundColor: '#fff',
+    padding: 5,
     borderRadius: 20,
-    padding: 4,
     zIndex: 10,
   },
-  saveButton: {
-    backgroundColor: '#D64584',
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 30,
-  },
-  saveButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
 
-export default UploadVehiclePictureScreen;
+export default LicensePictureScreen;

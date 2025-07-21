@@ -4,6 +4,8 @@ import {
   ScrollView, TouchableOpacity, KeyboardAvoidingView,
   Platform, Alert
 } from 'react-native';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import Constants from 'expo-constants';
@@ -17,7 +19,7 @@ const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
 const DriverCarpoolProfile = ({ route }) => {
-  const { userId, pickupLocation, dropoffLocation } = route.params || {};
+  const { userId,driverId ,pickupLocation, dropoffLocation } = route.params || {};
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pickupTime, setPickupTime] = useState(new Date());
@@ -35,6 +37,17 @@ const DriverCarpoolProfile = ({ route }) => {
   });
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+   useFocusEffect(
+          React.useCallback(() => {
+            const onBackPress = () => {
+              navigation.navigate('DriverCarpoolMap', { userId, driverId });
+              return true;
+            };
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+          }, [])
+        );
 
   useEffect(() => {
     if (route.params) {

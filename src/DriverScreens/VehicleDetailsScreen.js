@@ -1,20 +1,14 @@
 // 📁 src/DriverScreens/VehicleDetailsScreen.js
 
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert
-} from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
+import {View, Text, StyleSheet, TextInput, TouchableOpacity,  ScrollView, Alert} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import { Modal, Portal, Provider, Searchbar } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
 
-import {
-  getVehicleByDriverId,
-  saveVehicleDetails,
-  updateVehicleDetails
-} from '../../api';
+import {getVehicleByDriverId, saveVehicleDetails, updateVehicleDetails} from '../../api';
 
 const carModels = [
   'Corolla', 'Civic', 'Alto', 'Mehran', 'Wagon R', 'Swift', 'City', 'Elantra', 'Sonata',
@@ -28,7 +22,7 @@ const capacities = ['1', '2', '3', '4', '5', '6', '7'];
 
 const VehicleDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
-  const { driverId } = route.params || {};
+  const { driverId,userId } = route.params || {};
 console.log('driverId passed to screen:', driverId); // 👈 Add this for debugging
 
   const [modelVisible, setModelVisible] = useState(false);
@@ -45,6 +39,19 @@ console.log('driverId passed to screen:', driverId); // 👈 Add this for debugg
   const [color, setColor] = useState('');
   const [regNo, setRegNo] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+
+  useFocusEffect(
+  React.useCallback(() => {
+    const onBackPress = () => {
+     navigation.navigate('VehicleSetupScreen', { driverId: driverId, userId: userId, }); 
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => subscription.remove(); 
+  }, [])
+);
 
   useEffect(() => {
   if (!driverId) return;

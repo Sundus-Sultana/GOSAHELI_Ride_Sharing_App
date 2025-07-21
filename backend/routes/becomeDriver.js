@@ -1,7 +1,7 @@
 // backend/routes/becomeDriver.js
 const express = require('express');
 const router = express.Router();
-const client = require('../db'); // 🔁 Make sure db client is correct
+const client = require('../db');
 
 router.post('/', async (req, res) => {
   const { userId } = req.body;
@@ -11,15 +11,27 @@ router.post('/', async (req, res) => {
     const check = await client.query('SELECT * FROM "Driver" WHERE "UserID" = $1', [userId]);
 
     if (check.rows.length > 0) {
+      // ✅ Still update the last_role if not set
+      await client.query(
+        'UPDATE "User" SET "last_role" = $1 WHERE "UserID" = $2',
+        ['driver', userId]
+      );
       return res.status(200).json({ message: 'User is already a driver', driverId: check.rows[0].DriverID });
     }
 
-    // Insert new driver record
+    // Insert new driver
     const result = await client.query(
       'INSERT INTO "Driver" ("UserID") VALUES ($1) RETURNING "DriverID"',
       [userId]
     );
 
+    // ✅ Update last_role to 'driver'
+    await client.query(
+      'UPDATE "User" SET "last_role" = $1 WHERE "UserID" = $2',
+      ['driver', userId]
+      
+    );
+  console.log('Update result:', update.rowCount); // Should be 1
     res.status(201).json({ message: 'Driver created', driverId: result.rows[0].DriverID });
   } catch (error) {
     console.error('Error creating driver:', error);

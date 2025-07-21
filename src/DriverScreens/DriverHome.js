@@ -325,7 +325,7 @@ const DriverHome = ({ route }) => {
              </TouchableOpacity>
              <TouchableOpacity
                style={styles.navItem}
-               onPress={() => navigation.navigate('Profile')}
+               onPress={() => navigation.navigate('Profile', {userId})}
              >
                <MaterialIcons name="person" size={25} color="#888" />
                <Text style={styles.navText}>Profile</Text>

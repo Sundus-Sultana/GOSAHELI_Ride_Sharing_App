@@ -13,6 +13,7 @@ const carpoolRoutes = require('./routes/carpool');
 const uploadVehicleImage = require('./routes/uploadVehicleImage');
 const uploadLicense = require('./routes/uploadLicense');
 
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -34,6 +35,24 @@ const upload = multer({ storage });
 
 
 // ========== ✅Routes ==========
+
+//  ProfileUpdation
+const profileUpdationRoutes = require('./routes/ProfileUpdation');
+app.use(profileUpdationRoutes);
+
+// password update
+const changePasswordRoute = require('./routes/ChangeThePassword');
+app.use('/api', changePasswordRoute);
+
+//  feedback
+const feedbackRoute = require('./routes/feedback'); // Adjust path if needed
+app.use('/api/feedback', feedbackRoute);
+
+
+//  Become Passenger
+const becomePassengerRoute = require('./routes/becomePassenger');
+app.use('/api/become-passenger', becomePassengerRoute);
+
 //  Become Driver
 const becomeDriverRoute = require('./routes/becomeDriver');
 app.use('/become-driver', becomeDriverRoute);
@@ -167,7 +186,8 @@ app.get('/user-by-id/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
     const result = await client.query(
-      'SELECT "username", "email", "photo_url" FROM "User" WHERE "UserID" = $1',
+      `SELECT "UserID", "username", "email", "photo_url", "last_role" 
+       FROM "User" WHERE "UserID" = $1`,
       [userId]
     );
 
@@ -181,6 +201,23 @@ app.get('/user-by-id/:userId', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+app.get('/driver-by-user-id/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const result = await client.query('SELECT "DriverID" FROM "Driver" WHERE "UserID" = $1', [userId]);
+
+    if (result.rows.length > 0) {
+      res.json({ DriverID: result.rows[0].DriverID });
+    } else {
+      res.status(404).json({ message: 'Driver not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching driver ID:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 
 
 // ✅ Forgot password

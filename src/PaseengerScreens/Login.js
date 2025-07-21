@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
+
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/setup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { API_URL } from '../../api.js'; 
+import { API_URL, getUserById } from '../../api.js';
 
 export default function Login({ navigation }) {
   const [email, setEmail] = useState('');
@@ -13,6 +16,24 @@ export default function Login({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+
+useFocusEffect(
+  React.useCallback(() => {
+    const onBackPress = () => {
+      navigation.navigate('LandingActivity'); // ← Replace with your actual screen
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => subscription.remove();
+  }, [])
+);
+
+
+
+
 
   useEffect(() => {
     const loadSavedCredentials = async () => {
@@ -52,57 +73,59 @@ export default function Login({ navigation }) {
 
   setIsLoading(true);
 
-  try {
-    // Step 1: Authenticate with your PostgreSQL database
-    const loginResponse = await axios.post(`${API_URL}/login`, {
-      email,
-      password
-    });
+   try {
+      // Step 1: Authenticate
+       const loginResponse = await axios.post(`${API_URL}/login`, { email, password });
 
-    if (!loginResponse.data.success) {
-      throw new Error('Login failed');
-    }
-
-    // Step 2: Get complete user data
-    const userResponse = await axios.get(`${API_URL}/user?email=${email}`);
-    const userData = userResponse.data[0];
-
-    if (!userData) throw new Error('User record not found');
-
-    // Remember Me logic
-    if (rememberMe) {
-      await AsyncStorage.setItem('userCredentials', JSON.stringify({
-        email,
-        password,
-        rememberMe: true,
-      }));
-    } else {
-      await AsyncStorage.removeItem('userCredentials');
-    }
-
-    // Store UserID (note the exact case matching your database)
-    await AsyncStorage.setItem('UserID', String(userData.UserID));
-
-    // Navigate to Home
-    clearLoginForm();
-    navigation.navigate('Home', {
-      userName: userData.username || 'User',
-      userId: userData.UserID,  // Consistent casing
-    });
-
-  } catch (error) {
-    console.error('Login Error:', error);
-    let errorMessage = 'Login failed. Please try again.';
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-    } else if (error.message.includes('User record')) {
-      errorMessage = 'Account not properly registered';
-    }
-    Alert.alert('Error', errorMessage);
-  } finally {
-    setIsLoading(false);
+  if (!loginResponse.data.success || !loginResponse.data.user?.UserID) {
+    throw new Error('Login failed or missing UserID');
   }
-};
+
+  const userId = loginResponse.data.user.UserID;
+  console.log('✅ UserID from login:', userId);
+
+  const userData = await getUserById(userId);
+  if (!userData) throw new Error('User record not found');
+      // Step 3: Remember Me logic
+      if (rememberMe) {
+        await AsyncStorage.setItem('userCredentials', JSON.stringify({ email, password, rememberMe: true }));
+      } else {
+        await AsyncStorage.removeItem('userCredentials');
+      }
+
+      // Step 4: Save userId
+      await AsyncStorage.setItem('UserID', String(userData.UserID));
+
+      // Step 5: Navigate based on role
+      clearLoginForm();
+
+      if (userData.last_role === 'driver') {
+        navigation.navigate('DriverHome', {
+          userName: userData.username || 'User',
+          userId: userData.UserID,
+        });
+      } else if (userData.last_role === 'passenger') {
+        navigation.navigate('Home', {
+          userName: userData.username || 'User',
+          userId: userData.UserID,
+        });
+      } else {
+        Alert.alert('Error', 'User role not set properly. Please contact support.');
+      }
+    } catch (error) {
+      console.error('Login Error:', error);
+      let errorMessage = 'Login failed. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message.includes('User record')) {
+        errorMessage = 'Account not properly registered';
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <View style={styles.screen}>

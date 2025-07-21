@@ -18,108 +18,144 @@ import Swiper from "react-native-swiper";
 import { useNavigation } from "@react-navigation/native";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import MenuOverlay from "../components/MenuOverlay";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase/setup';
 import { getRideHistory } from '../../api.js';
 import SaheliLogo from '../../assets/IconWomen2.png';
-import { getUser } from '../../api';
+import { getUserById ,getDriverById} from '../../api';
+import { ScrollView } from "react-native-gesture-handler";
+import axios from 'axios'; // ✅ Make sure this is at the top
+import { API_URL } from '../../api.js'; 
+
 
 
 
 const Home = ({ route }) => {
   const navigation = useNavigation();
-  const { userName, userId } = route.params || {};
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('BookRide');
   const [rideHistory, setRideHistory] = useState([]);
   const [showRating, setShowRating] = useState(false);
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
-  const [dbUser, setDbUser] = useState(null); // ✅ user from DB
+  const [dbUser, setDbUser] = useState(null);
+
+  // Always prioritize route.params.userId if provided
+  const userId = route?.params?.userId ?? auth.currentUser?.uid;
+  const userName = route?.params?.userName ?? auth.currentUser?.displayName;
+
+ const insertPassenger = async (id) => {
+  console.log('🛫 insertPassenger() called with:', id); // <--- Add this
+  try {
+    const response = await axios.post(`${API_URL}/api/become-passenger`, { userId: id });
+    console.log('✅ Passenger inserted or exists:', response.data);
+  } catch (error) {
+    if (error.response) {
+      console.log('⚠️ Backend error:', error.response.data);
+    } else {
+      console.log('❌ insertPassenger failed:', error.message);
+    }
+  }
+};
 
 
 
-  // Function to format currency as PKR
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return 'PKR 0';
     return `PKR ${amount.toLocaleString('en-PK')}`;
   };
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const email = auth.currentUser?.email;
-      if (!email) return;
-
-      try {
-        const userFromDB = await getUser(email);
-        if (userFromDB.length > 0) {
-          setDbUser(userFromDB[0]); // ✅ Set full user from DB
-        }
-      } catch (err) {
-        console.error('Error fetching user from DB:', err);
+  // Fetch user from DB
+useEffect(() => {
+  const fetchUserData = async () => {
+    if (!userId) return;
+    try {
+      const userFromDB = await getUserById(userId);
+      if (userFromDB) {
+        setDbUser(userFromDB); // Set user details for display or logic
+        await insertPassenger(userId); // Insert into Passenger table if not exists
       }
-    };
+    } catch (err) {
+      console.error('Error fetching user by ID:', err);
+    }
+  };
 
+  fetchUserData();
+}, []);
+
+
+
+  // Fetch ride history
+  useEffect(() => {
     const fetchRideHistory = async () => {
       try {
-        const id = route.params?.userId || dbUser?.UserID;
-        if (!id) return;
-
-        const history = await getRideHistory(id);
+        if (!userId) return;
+        const history = await getRideHistory(userId);
         setRideHistory(history);
       } catch (error) {
         console.error('Error fetching ride history:', error);
       }
     };
 
-    fetchUserData();
     fetchRideHistory();
+  }, [userId]);
 
-    const timer = setTimeout(() => {
-      setShowRating(true);
-    }, 12000);
+ useEffect(() => {
+  const checkRatingShown = async () => {
+    const hasRatedBefore = await AsyncStorage.getItem(`ratingShown-${userId}`);
+    if (!hasRatedBefore) {
+      setTimeout(() => {
+        setShowRating(true);
+      }, 12000);
+    }
+  };
+  checkRatingShown();
+}, [userId]);
 
-    return () => clearTimeout(timer);
-  }, []);
 
 
   const handleRating = (selectedRating) => {
     setRating(selectedRating);
   };
 
-  const submitRating = () => {
-    setHasRated(true);
-    setShowRating(false);
+  const submitRating = async () => {
+  setHasRated(true);
+  setShowRating(false);
+  await AsyncStorage.setItem(`ratingShown-${userId}`, 'true');
 
-    if (rating > 3) {
-      // Open app store for positive ratings
-      if (Platform.OS === 'ios') {
-        Linking.openURL('itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review');
-      } else {
-        Linking.openURL('market://details?id=YOUR_PACKAGE_NAME');
-      }
-    } else {
-      // Show feedback option for low ratings
-      Alert.alert(
-        'Thanks for your feedback!',
-        'We appreciate your honesty. What could we improve?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          },
-          {
-            text: 'Give Feedback',
-            onPress: () => navigation.navigate('Support')
-          }
-        ]
-      );
-    }
-  };
+  // 🔄 Send only RateValue and UserID
+  try {
+    const response = await axios.post(`${API_URL}/api/feedback`, {
+      RateValue: rating,
+      UserID: userId, // Firebase UID
+    });
+
+    console.log('✅ Feedback submitted:', response.data);
+  } catch (error) {
+    console.error('❌ Failed to submit feedback:', error.response?.data || error.message);
+  }
+
+  // 🎯 Handle rating > 3 logic
+  if (rating > 3) {
+    const appStoreUrl = Platform.OS === 'ios'
+      ? 'itms-apps://itunes.apple.com/app/idYOUR_APP_ID?action=write-review'
+      : 'market://details?id=YOUR_PACKAGE_NAME';
+    Linking.openURL(appStoreUrl);
+  } else {
+    Alert.alert(
+      'Thanks for your feedback!',
+      'We appreciate your honesty. What could we improve?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Give Feedback', onPress: () => navigation.navigate('Support') }
+      ]
+    );
+  }
+};
 
 
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'N/A';
-
     try {
       const date = new Date(dateTimeString);
       return date.toLocaleString('en-US', {
@@ -127,13 +163,14 @@ const Home = ({ route }) => {
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        hour12: true
+        hour12: true,
       });
     } catch (e) {
       return dateTimeString;
     }
   };
 
+  
   // Render star rating component
   const renderStars = () => {
     return (
@@ -262,7 +299,7 @@ const Home = ({ route }) => {
           </View>
         ) : (
           <FlatList
-            data={rideHistory.slice(0, 2)}
+            data={rideHistory.slice(0, 3)}
             keyExtractor={(item) => item.ride_history_id.toString()}
             renderItem={({ item }) => (
               <View style={styles.historyCard}>
@@ -283,7 +320,7 @@ const Home = ({ route }) => {
               </View>
             )}
             contentContainerStyle={styles.historyList}
-            scrollEnabled={false}
+            scrollEnabled={true}
           />
         )}
       </View>
@@ -348,7 +385,9 @@ const Home = ({ route }) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => navigation.navigate('Profile', {userId}
+          )}
+          
         >
           <MaterialIcons name="person" size={25} color="#888" />
           <Text style={styles.navText}>Profile</Text>

@@ -9,13 +9,15 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import * as ImagePicker from 'expo-image-picker';
-import { uploadProfilePhoto, getUserPhoto, API_URL } from '../../api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { uploadProfilePhoto, getUserPhoto, getVehicleByDriverId, API_URL } from '../../api';
 
 export default function OfferCarpool({ navigation, route }) {
   const userId = route?.params?.userId;
@@ -27,20 +29,17 @@ export default function OfferCarpool({ navigation, route }) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Fetch full user info from your API endpoint
   const fetchUserData = async () => {
     try {
       const response = await fetch(`${API_URL}/user-by-id/${userId}`);
       const data = await response.json();
       setUserName(data.username || '');
-      // Fallback to empty string if no photo URL is returned
       setPhotoURL(data.photo_url || '');
     } catch (error) {
       console.error('Error fetching user info:', error);
     }
   };
 
-  // Load the user's photo using your getUserPhoto API (for extra assurance)
   const loadUserPhoto = async () => {
     try {
       const response = await getUserPhoto(userId);
@@ -53,20 +52,59 @@ export default function OfferCarpool({ navigation, route }) {
     }
   };
 
-  // Load data when this screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      const checkSetupStatus = async () => {
-        const completed = await AsyncStorage.getItem('vehicleSetupComplete');
-        setShowAlert(completed !== 'true');
-        await fetchUserData();
-        await loadUserPhoto();
-      };
-      checkSetupStatus();
-    }, [])
-  );
 
-  // Launch image picker so the user may upload a profile photo
+
+  useFocusEffect(
+      React.useCallback(() => {
+        const onBackPress = () => {
+          navigation.navigate('DriverHome', { userId, driverId });
+          return true;
+        };
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => subscription.remove();
+      }, [])
+    );
+
+
+  useFocusEffect(
+  useCallback(() => {
+    const checkVehicleData = async () => {
+      try {
+        const data = await getVehicleByDriverId(driverId);
+
+        if (!data || Object.keys(data).length === 0) {
+          console.warn('🚨 No vehicle record found.');
+          setShowAlert(true); // No vehicle row
+          return;
+        }
+
+        // Explicitly check if any required field is missing or null
+        const fieldsMissing =
+          !data.VehicleID ||
+          !data.VehicleModel ||
+          !data.VehicleType ||
+          !data.capacity ||
+          !data.color ||
+          !data.PlateNumber ||
+          !data.vehicle_url ||
+          !data.license_front_url ||
+          !data.license_back_url;
+
+        setShowAlert(fieldsMissing);
+      } catch (error) {
+        console.error('🚨 Error fetching vehicle data:', error);
+        setShowAlert(true); // On error, assume missing
+      }
+
+      await fetchUserData();
+      await loadUserPhoto();
+    };
+
+    checkVehicleData();
+  }, [])
+);
+
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -92,7 +130,6 @@ export default function OfferCarpool({ navigation, route }) {
     }
   };
 
-  // Upload the selected image to your backend
   const saveProfilePhoto = async (base64Image) => {
     try {
       setUploading(true);
@@ -127,7 +164,6 @@ export default function OfferCarpool({ navigation, route }) {
     }
   };
 
-  // Prevent navigation to Register Your Route if no profile photo has been uploaded
   const handleRegisterRoute = () => {
     if (!photoURL) {
       Alert.alert(
@@ -136,12 +172,12 @@ export default function OfferCarpool({ navigation, route }) {
       );
       return;
     }
-    navigation.navigate('DriverCarpoolMap', { userId });
+    navigation.navigate('DriverCarpoolMap', { userId ,driverId});
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Profile Section in a row */}
+      {/* Profile Row */}
       <View style={styles.profileRow}>
         <TouchableOpacity onPress={pickImage} disabled={uploading}>
           {uploading ? (
@@ -154,9 +190,7 @@ export default function OfferCarpool({ navigation, route }) {
           ) : photoURL ? (
             <Image
               source={{
-                uri: photoURL.startsWith('/')
-                  ? `${API_URL}${photoURL}`
-                  : photoURL,
+                uri: photoURL.startsWith('/') ? `${API_URL}${photoURL}` : photoURL,
               }}
               style={styles.profileImage}
             />
@@ -180,7 +214,7 @@ export default function OfferCarpool({ navigation, route }) {
 
         <TouchableOpacity
           style={[styles.buttonBox, { position: 'relative' }]}
-          onPress={() => navigation.navigate('VehicleSetupScreen', { userId,driverId })}
+          onPress={() => navigation.navigate('VehicleSetupScreen', { userId, driverId })}
         >
           <MaterialIcons name="directions-car" size={28} color="white" />
           <Text style={styles.buttonText}>Register{"\n"}Your Vehicle</Text>
@@ -246,7 +280,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: '#D64584',
-    fontStyle:'italic'
+    fontStyle: 'italic',
   },
   buttonRow: {
     flexDirection: 'row',

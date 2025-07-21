@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.22:5000';
+export const API_URL = 'http://192.168.100.10:5000';
 
 
 
@@ -16,7 +16,15 @@ export const getUserById = async (userId) => {
   }
 };
 
-
+export const getDriverById = async (userId) => {
+  try {
+    const response = await axios.get(`${API_URL}/driver-by-user-id/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching Driver by ID:', error);
+    return null;
+  }
+};
 
 
 

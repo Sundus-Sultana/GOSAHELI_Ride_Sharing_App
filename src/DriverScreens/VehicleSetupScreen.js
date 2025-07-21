@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
+import { getVehicleByDriverId } from '../../api'; // ✅ Adjust path if needed
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SetupVehicleScreen({ navigation, route }) {
@@ -11,26 +11,57 @@ export default function SetupVehicleScreen({ navigation, route }) {
   const [vehicleDetailsUploaded, setVehicleDetailsUploaded] = useState(false);
   const [vehiclePhotoUploaded, setVehiclePhotoUploaded] = useState(false);
   const [licenseUploaded, setLicenseUploaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const isFocused = useIsFocused();
 
-  useEffect(() => {
-    const loadCompletionStatus = async () => {
-      const [vehicleDetails, vehiclePhoto, license] = await Promise.all([
-        AsyncStorage.getItem('vehicleDetailsUploaded'),
-        AsyncStorage.getItem('vehiclePhotoUploaded'),
-        AsyncStorage.getItem('licenseUploaded'),
-      ]);
+  // Handle back button
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('OfferCarpool', { userId, driverId });
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
 
-      setVehicleDetailsUploaded(vehicleDetails === 'true');
-      setVehiclePhotoUploaded(vehiclePhoto === 'true');
-      setLicenseUploaded(license === 'true');
+  // Fetch from backend and check fields independently
+  useEffect(() => {
+    const fetchStatus = async () => {
+      setLoading(true);
+      if (!driverId) return;
+
+      const data = await getVehicleByDriverId(driverId);
+      if (!data) {
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Independent field checks
+      const detailsValid =
+        !!data.VehicleModel &&
+        !!data.VehicleType &&
+        !!data.color &&
+        !!data.capacity &&
+        !!data.PlateNumber;
+
+      const photoValid = !!data.vehicle_url;
+      const licenseValid = !!data.license_front_url && !!data.license_back_url;
+
+      setVehicleDetailsUploaded(detailsValid);
+      setVehiclePhotoUploaded(photoValid);
+      setLicenseUploaded(licenseValid);
+
+      setLoading(false);
     };
 
     if (isFocused) {
-      loadCompletionStatus();
+      fetchStatus();
     }
-  }, [isFocused]);
+  }, [isFocused, driverId]);
 
+  // Optionally store completion status
   useEffect(() => {
     const checkCompletion = async () => {
       if (vehicleDetailsUploaded && vehiclePhotoUploaded && licenseUploaded) {
@@ -46,75 +77,78 @@ export default function SetupVehicleScreen({ navigation, route }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.navigate('OfferCarpool', { userId, driverId })}>
           <Ionicons name="close" size={24} color="black" />
         </TouchableOpacity>
         <Text style={styles.headerText}>Setup Your Vehicle</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Vehicle Details */}
-      <TouchableOpacity
-        style={styles.item}
-        onPress={() => navigation.navigate('VehicleDetailsScreen', {
-  userId: userId,
-  driverId: driverId, // 👈 Ensure this is defined and passed
-})}
-      >
-        <Text style={styles.itemText}>Vehicle details</Text>
-        <View style={styles.rightIcons}>
-          <Ionicons
-            name="checkmark-circle"
-            size={20}
-            color={vehicleDetailsUploaded ? 'green' : 'gray'}
-            style={{ marginRight: 4 }}
-          />
-          <Ionicons name="chevron-forward" size={20} color="gray" />
+      {/* Loading spinner */}
+      {loading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#D64584" />
         </View>
-      </TouchableOpacity>
+      ) : (
+        <>
+          {/* Vehicle Details */}
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => navigation.navigate('VehicleDetailsScreen', { userId, driverId })}
+          >
+            <Text style={styles.itemText}>Vehicle details</Text>
+            <View style={styles.rightIcons}>
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
+                color={vehicleDetailsUploaded ? 'green' : 'gray'}
+                style={{ marginRight: 4 }}
+              />
+              <Ionicons name="chevron-forward" size={20} color="gray" />
+            </View>
+          </TouchableOpacity>
 
-      {/* Photo of vehicle */}
-      <TouchableOpacity
-        style={styles.item}
-        onPress={() => navigation.navigate('UploadVehiclePictureScreen', {
-  userId: userId,
-  driverId: driverId, // 👈 Ensure this is defined and passed
-})}
-      >
-        <Text style={styles.itemText}>Photo of vehicle</Text>
-        <View style={styles.rightIcons}>
-          <Ionicons
-            name="checkmark-circle"
-            size={20}
-            color={vehiclePhotoUploaded ? 'green' : 'gray'}
-            style={{ marginRight: 4 }}
-          />
-          <Ionicons name="chevron-forward" size={20} color="gray" />
-        </View>
-      </TouchableOpacity>
+          {/* Photo of Vehicle */}
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => navigation.navigate('UploadVehiclePictureScreen', { userId, driverId })}
+          >
+            <Text style={styles.itemText}>Photo of vehicle</Text>
+            <View style={styles.rightIcons}>
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
+                color={vehiclePhotoUploaded ? 'green' : 'gray'}
+                style={{ marginRight: 4 }}
+              />
+              <Ionicons name="chevron-forward" size={20} color="gray" />
+            </View>
+          </TouchableOpacity>
 
-      {/* Driver License */}
-      <TouchableOpacity
-        style={styles.item}
-        onPress={() => navigation.navigate('LicensePictureScreen', { userId, driverId ,
-      refreshKey: Date.now(), })}
-      >
-        <Text style={styles.itemText}>Driver License</Text>
-        <View style={styles.rightIcons}>
-          <Ionicons
-            name="checkmark-circle"
-            size={20}
-            color={licenseUploaded ? 'green' : 'gray'}
-            style={{ marginRight: 4 }}
-          />
-          <Ionicons name="chevron-forward" size={20} color="gray" />
-        </View>
-      </TouchableOpacity>
+          {/* Driver License */}
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => navigation.navigate('LicensePictureScreen', {
+              userId,
+              driverId,
+              refreshKey: Date.now(),
+            })}
+          >
+            <Text style={styles.itemText}>Driver License</Text>
+            <View style={styles.rightIcons}>
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
+                color={licenseUploaded ? 'green' : 'gray'}
+                style={{ marginRight: 4 }}
+              />
+              <Ionicons name="chevron-forward" size={20} color="gray" />
+            </View>
+          </TouchableOpacity>
 
-      {/* Save Button */}
-      <TouchableOpacity style={styles.saveButton}>
-        <Text style={styles.saveButtonText}>SAVE INFORMATION</Text>
-      </TouchableOpacity>
+          
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -165,5 +199,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

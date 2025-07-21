@@ -1,9 +1,13 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ImageBackground, StyleSheet, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
 
 export default function LandingActivity({ navigation }) {
 
   return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar backgroundColor="#000000ff" barStyle="light-content" />
     <ImageBackground
 source={require('../../assets/bg.png')}
       style={styles.background}
@@ -41,10 +45,14 @@ source={require('../../assets/bg.png')}
         </View>
       </View>
     </ImageBackground>
-  );
+ </SafeAreaView>  );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+  flex: 1,
+  backgroundColor: "#f0e5e5ff", // To match your header background
+},
   background: {
     flex: 1,
     resizeMode: 'cover',

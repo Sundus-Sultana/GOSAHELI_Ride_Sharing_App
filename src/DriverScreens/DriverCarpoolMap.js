@@ -6,6 +6,9 @@ import {
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import axios from 'axios';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,7 +37,7 @@ const debounce = (func, delay) => {
 
 const DriverCarpoolMap = ({ route }) => {
   // Receive but don't use userId
-  const { userId } = route.params;
+  const { userId , driverId} = route.params;
   const mapRef = useRef(null);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
@@ -49,6 +52,17 @@ const DriverCarpoolMap = ({ route }) => {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const navigation = useNavigation();
+
+  useFocusEffect(
+        React.useCallback(() => {
+          const onBackPress = () => {
+            navigation.navigate('OfferCarpool', { userId, driverId });
+            return true;
+          };
+          const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+          return () => subscription.remove();
+        }, [])
+      );
 
   const fetchSuggestions = useCallback(debounce(async (text, isPickup) => {
     if (!text || text.length < 2) return;
@@ -174,7 +188,12 @@ const DriverCarpoolMap = ({ route }) => {
   }, [pickup, dropoff]);
 
   return (
+     <SafeAreaView style={styles.safeArea}>
+        <StatusBar backgroundColor="#d63384" barStyle="light-content" />
     <View style={styles.container}>
+       <TouchableOpacity onPress={() => navigation.navigate('OfferCarpool', { userId, driverId })}>
+          <Ionicons name="close" size={34} color="black" style={{paddingLeft:10}} />
+        </TouchableOpacity>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -236,7 +255,8 @@ const DriverCarpoolMap = ({ route }) => {
       {
         text: 'OK',
         onPress: () => navigation.navigate('DriverCarpoolProfile',{
-        userId: userId , // Pass it forward
+        userId: userId , 
+        driverId: driverId,// Pass it forward
         pickupLocation: pickupText,
           dropoffLocation: dropoffText
         })
@@ -249,10 +269,15 @@ const DriverCarpoolMap = ({ route }) => {
         </View>
       )}
     </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+    safeArea: {
+  flex: 1,
+  backgroundColor: "#fff", // To match your header background
+},
   container: { flex: 1 },
   map: { flex: 1 },
   searchBox: {

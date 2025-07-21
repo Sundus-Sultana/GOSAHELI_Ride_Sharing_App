@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, Alert
 } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { BackHandler } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { API_URL, getVehicleByDriverId, deleteVehicleImage } from '../../api';
-import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const UploadVehiclePictureScreen = ({ route }) => {
@@ -15,6 +16,19 @@ const UploadVehiclePictureScreen = ({ route }) => {
   const [imageUri, setImageUri] = useState(null);
   const [initialImageUri, setInitialImageUri] = useState(null);
   const [isEditMode, setIsEditMode] = useState(true); // allow pick when no image
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+ navigation.navigate('VehicleSetupScreen', { driverId: driverId, userId: userId, // 👈 optional, if used
+});         return true;
+      };
+  
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+  
+      return () => subscription.remove(); // Clean up on unmount
+    }, [])
+  );
 
   useEffect(() => {
     const loadImage = async () => {
