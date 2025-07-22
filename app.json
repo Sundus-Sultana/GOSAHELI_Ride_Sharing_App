@@ -20,7 +20,10 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide ride services and navigation.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to provide ride services and navigation.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       },
       "bundleIdentifier": "com.anonymous.saheli",
       "config": {
@@ -36,7 +39,9 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.anonymous.saheli",
       "config": {
@@ -51,11 +56,12 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "e2216b0b-b160-49fb-827f-95bb925ddd32"
       }
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "owner": "atiqa_119"
   }
 }

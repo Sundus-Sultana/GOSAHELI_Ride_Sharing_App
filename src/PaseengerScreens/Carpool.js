@@ -31,7 +31,7 @@ const debounce = (func, delay) => {
 
 const Carpool = ({ route }) => {
   // Receive but don't use riderId
-  const { riderId } = route.params;
+  const { userId } = route.params;
   const mapRef = useRef(null);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
@@ -233,7 +233,7 @@ const Carpool = ({ route }) => {
       {
         text: 'OK',
         onPress: () => navigation.navigate('CarpoolProfile',{
-        riderId: riderId , // Pass it forward
+        userId: userId , // Pass it forward
         pickupLocation: pickupText,
           dropoffLocation: dropoffText
         })

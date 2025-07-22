@@ -10,6 +10,8 @@ import axios from 'axios';
 import { API_URL } from '../../api';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
+
 
 
 const ChangePassword = ({ navigation, route }) => {
@@ -27,18 +29,18 @@ const ChangePassword = ({ navigation, route }) => {
 
 
 
-   useFocusEffect(
-      React.useCallback(() => {
-        const onBackPress = () => {
-navigation.navigate('SettingsScreen', { userId });
-          return true;
-        };
-  
-        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-  
-        return () => subscription.remove(); // Clean up on unmount
-      }, [])
-    );
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('SettingsScreen', { userId });
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => subscription.remove(); // Clean up on unmount
+    }, [])
+  );
 
   const handlePasswordChange = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -58,31 +60,45 @@ navigation.navigate('SettingsScreen', { userId });
     }
 
     try {
-      setLoading(true);
-      console.log('URL Hitting:', `${API_URL}/api/change-password`);
-      const res = await axios.post(`${API_URL}/api/change-password`, {
-        userId,
-        currentPassword,
-        newPassword,
-      });
+  setLoading(true);
+  console.log('URL Hitting:', `${API_URL}/api/change-password`);
 
-      if (res.data.success) {
-        Alert.alert('Success', 'Password updated successfully');
-        await showLocalNotification("✅ Password Updated", "Your password has been changed.");
-        navigation.goBack();
-      } else {
-        Alert.alert('Error', res.data.message || 'Password update failed');
-      }
-    } catch (err) {
-      console.error('Password Change Error:', err.response?.data || err.message);
-      if (err.response?.status === 400 || err.response?.status === 404) {
-        Alert.alert('Error', err.response.data.message || 'Invalid request');
-      } else {
-        Alert.alert('Error', 'Something went wrong');
-      }
-    } finally {
-      setLoading(false);
-    }
+  const res = await axios.post(`${API_URL}/api/change-password`, {
+    userId,
+    currentPassword,
+    newPassword,
+  });
+
+  if (res.data.success) {
+   
+
+    // ✅ Save in backend DB (Notification table)
+    await axios.post(`${API_URL}/api/save-notification`, {
+      userId,
+      type: 'Password Change',
+      message: 'Your password was successfully updated.'
+    });
+
+    Alert.alert('Success', 'Password updated successfully');
+    Toast.show({
+  type: 'success',
+  text1: 'Password Changed',
+  text2: 'Your password has been updated successfully.',
+});
+    navigation.goBack();
+  } else {
+    Alert.alert('Error', res.data.message || 'Password update failed');
+  }
+} catch (err) {
+  console.error('Password Change Error:', err.response?.data || err.message);
+  if (err.response?.status === 400 || err.response?.status === 404) {
+    Alert.alert('Error', err.response.data.message || 'Invalid request');
+  } else {
+    Alert.alert('Error', 'Something went wrong');
+  }
+} finally {
+  setLoading(false);
+}
   };
 
   return (

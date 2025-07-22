@@ -16,7 +16,7 @@ const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
 const CarpoolProfile = ({ route }) => {
-  const { riderId, pickupLocation, dropoffLocation } = route.params || {};
+  const { userId, pickupLocation, dropoffLocation } = route.params || {};
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState({
@@ -136,7 +136,7 @@ const CarpoolProfile = ({ route }) => {
     try {
       if (saveProfile) {
         const profilePayload = {
-          rider_id: riderId,
+          UserID: userId,
           pickup_location: pickup,
           dropoff_location: dropoff,
           seats: parseInt(seatsNeeded),
@@ -149,7 +149,8 @@ const CarpoolProfile = ({ route }) => {
           allows_luggage: request.luggage,
           is_recurring: request.recurring,
           recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
-          special_requests: request.specialRequests || null
+          special_requests: request.specialRequests || null,
+          route_type: routeType
         };
 
         console.log('Sending payload:', profilePayload);

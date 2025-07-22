@@ -218,10 +218,8 @@ const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,userName})
                     style={styles.menuItem}
                     onPress={() => {
                       closeModal();
-                      navigation.navigate('Wallet');
-                    }}
-                  >
-                    <Text style={styles.menuText}>Wallet</Text>
+                      navigation.navigate('CarpoolProfileList', { userId })}}>
+                    <Text style={styles.menuText}>My Carpool Profiles</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity

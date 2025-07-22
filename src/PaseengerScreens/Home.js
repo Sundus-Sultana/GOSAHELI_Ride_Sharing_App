@@ -265,7 +265,7 @@ useEffect(() => {
               navigation.navigate('Carpool', {
                 userName: userName || auth.currentUser?.displayName || 'User',
                 userEmail: auth.currentUser?.email,
-                userId: auth.currentUser?.uid,
+                userId: userId,
                 riderId: route.params?.userId
               });
             }, 100);

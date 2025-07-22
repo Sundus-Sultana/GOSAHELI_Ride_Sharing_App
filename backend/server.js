@@ -9,11 +9,12 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const client = require('./db');
 
+
 const carpoolRoutes = require('./routes/carpool');
 const uploadVehicleImage = require('./routes/uploadVehicleImage');
 const uploadLicense = require('./routes/uploadLicense');
 
-
+// ========== MIDDLEWARE ==========
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -47,6 +48,10 @@ app.use('/api', changePasswordRoute);
 //  feedback
 const feedbackRoute = require('./routes/feedback'); // Adjust path if needed
 app.use('/api/feedback', feedbackRoute);
+
+//  notification
+const notificationRoutes = require('./routes/notifications'); // adjust path if needed
+app.use('/api', notificationRoutes);
 
 
 //  Become Passenger
