@@ -4,9 +4,7 @@ import {
   TextInput, FlatList, ActivityIndicator, Alert, Keyboard
 } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
-import * as Location from 'expo-location';
 import axios from 'axios';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoic3VuZHVzc3VsdGFuYSIsImEiOiJjbWFzYXd6MXYwZHdjMnFzNW51OHFxbW1iIn0.3WX-TCF91Jh3Go-pjGwAOg';
@@ -14,7 +12,6 @@ const BASE_FARE_PKR = 100;
 const PER_KM_RATE_PKR = 30;
 const bboxIslamabadRawalpindi = '72.8,33.4,73.3,33.9';
 
-// ✅ Smart English filter: not too strict
 const isMostlyEnglish = (text) => {
   const englishChars = text.match(/[a-zA-Z]/g) || [];
   const ratio = englishChars.length / text.length;
@@ -30,9 +27,8 @@ const debounce = (func, delay) => {
 };
 
 const Carpool = ({ route }) => {
-  // Receive but don't use riderId
-  const { userId } = route.params;
-  const mapRef = useRef(null);
+  const { userId, pickupLocation = '', dropoffLocation = '' } = route.params || {};
+    const mapRef = useRef(null);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
   const [pickupText, setPickupText] = useState('');
@@ -51,11 +47,10 @@ const Carpool = ({ route }) => {
     if (!text || text.length < 2) return;
     setSuggestionsLoading(true);
     try {
-      const commonFix = {
+      const fixedText = {
         'iiui': 'international islamic university',
         'sadqabad': 'sadiqabad'
-      };
-      const fixedText = commonFix[text.toLowerCase()] || text;
+      }[text.toLowerCase()] || text;
 
       const mapbox = await axios.get(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(fixedText)}.json`, {
         params: {
@@ -77,40 +72,10 @@ const Carpool = ({ route }) => {
         }))
         .filter(r => r.display_name && isMostlyEnglish(r.display_name));
 
-      if (results.length < 3) {
-        const nomRes = await axios.get('https://nominatim.openstreetmap.org/search', {
-          params: {
-            q: fixedText,
-            format: 'json',
-            addressdetails: 1,
-            viewbox: '72.8,33.9,73.3,33.4',
-            bounded: 1,
-            countrycodes: 'pk',
-            limit: 10
-          },
-          headers: { 'User-Agent': 'YourApp/1.0' }
-        });
-
-        const nomResults = nomRes.data
-          .map(f => {
-            const name = f.address?.suburb || f.address?.neighbourhood || f.address?.road || f.address?.village || f.address?.city || f.display_name.split(',')[0];
-            return {
-              display_name: name,
-              lat: parseFloat(f.lat),
-              lon: parseFloat(f.lon),
-              relevance: 0.5,
-              source: 'nominatim'
-            };
-          })
-          .filter(r => r.display_name && isMostlyEnglish(r.display_name));
-
-        results = [...results, ...nomResults];
-      }
-
       const clean = [];
       const seen = new Set();
       for (const r of results) {
-        if (r.display_name && isMostlyEnglish(r.display_name) && !seen.has(r.display_name)) {
+        if (!seen.has(r.display_name)) {
           clean.push(r);
           seen.add(r.display_name);
         }
@@ -124,6 +89,40 @@ const Carpool = ({ route }) => {
       setSuggestionsLoading(false);
     }
   }, 400), []);
+
+  const fetchSuggestionsAndReturn = async (text) => {
+    if (!text || text.length < 2) return [];
+    try {
+      const fixedText = {
+        'iiui': 'international islamic university',
+        'sadqabad': 'sadiqabad'
+      }[text.toLowerCase()] || text;
+
+      const mapbox = await axios.get(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(fixedText)}.json`, {
+        params: {
+          access_token: MAPBOX_TOKEN,
+          bbox: bboxIslamabadRawalpindi,
+          limit: 10,
+          autocomplete: true,
+          fuzzyMatch: true
+        }
+      });
+
+      let results = mapbox.data.features
+        .map(f => ({
+          display_name: f.text || f.place_name.split(',')[0],
+          lat: f.center[1],
+          lon: f.center[0],
+          relevance: f.relevance
+        }))
+        .filter(r => r.display_name && isMostlyEnglish(r.display_name));
+
+      results.sort((a, b) => b.relevance - a.relevance);
+      return results;
+    } catch (e) {
+      return [];
+    }
+  };
 
   const handleSelect = (item, isPickup) => {
     const coords = { latitude: item.lat, longitude: item.lon };
@@ -166,9 +165,50 @@ const Carpool = ({ route }) => {
     }
   };
 
+useEffect(() => {
+  console.log('ROUTE PARAMS:', route.params);
+  console.log('Pickup:', pickupLocation);
+  console.log('Dropoff:', dropoffLocation);
+}, [route.params]);
+ //useEffect(() => {
+  //if (route.params?.pickupLocation) {
+   // setPickup(route.params.pickupLocation);
+ // }
+ // if (route.params?.dropoffLocation) {
+  //  setDropoff(route.params.dropoffLocation);
+  //}
+//}, [route.params]);
+
   useEffect(() => {
     if (pickup && dropoff) calculateRoute();
   }, [pickup, dropoff]);
+
+  useEffect(() => {
+    const autoFill = async () => {
+      await new Promise(res => setTimeout(res, 300));
+
+      if (pickupLocation && pickupText.trim().toLowerCase() !== pickupLocation.trim().toLowerCase()) {
+        setPickupText(pickupLocation);
+        const suggestions = await fetchSuggestionsAndReturn(pickupLocation);
+        if (suggestions.length > 0) {
+          const first = suggestions[0];
+          setPickup({ latitude: first.lat, longitude: first.lon });
+          setPickupText(first.display_name);
+        }
+      }
+
+      if (dropoffLocation && dropoffText.trim().toLowerCase() !== dropoffLocation.trim().toLowerCase()) {
+        setDropoffText(dropoffLocation);
+        const suggestions = await fetchSuggestionsAndReturn(dropoffLocation);
+        if (suggestions.length > 0) {
+          const first = suggestions[0];
+          setDropoff({ latitude: first.lat, longitude: first.lon });
+          setDropoffText(first.display_name);
+        }
+      }
+    };
+    autoFill();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -187,8 +227,13 @@ const Carpool = ({ route }) => {
           style={styles.input}
           placeholder="Pickup location"
           value={pickupText}
-          onChangeText={t => { setPickupText(t); fetchSuggestions(t, true); }}
-          onFocus={() => setIsPickupFocused(true)}
+          onChangeText={t => {
+            setPickupText(t);
+            if (!pickupLocation) fetchSuggestions(t, true);
+          }}
+          onFocus={() => {
+            if (!pickupLocation) setIsPickupFocused(true);
+          }}
         />
         {isPickupFocused && (
           <FlatList
@@ -206,8 +251,13 @@ const Carpool = ({ route }) => {
           style={styles.input}
           placeholder="Dropoff location"
           value={dropoffText}
-          onChangeText={t => { setDropoffText(t); fetchSuggestions(t, false); }}
-          onFocus={() => setIsDropoffFocused(true)}
+          onChangeText={t => {
+            setDropoffText(t);
+            if (!dropoffLocation) fetchSuggestions(t, false);
+          }}
+          onFocus={() => {
+            if (!dropoffLocation) setIsDropoffFocused(true);
+          }}
         />
         {isDropoffFocused && (
           <FlatList
@@ -226,28 +276,28 @@ const Carpool = ({ route }) => {
         <View style={styles.bottomBox}>
           <Text style={styles.price}>Estimated Fare: {price} PKR</Text>
           <TouchableOpacity style={styles.bookBtn} onPress={() => {
-  Alert.alert(
-    'Booked',
-    `Fare: ${price} PKR`,
-    [
-      {
-        text: 'OK',
-        onPress: () => navigation.navigate('CarpoolProfile',{
-        userId: userId , // Pass it forward
-        pickupLocation: pickupText,
-          dropoffLocation: dropoffText
-        })
-      }
-    ]
-  );
-}}>
+            Alert.alert(
+              'Booked',
+              `Fare: ${price} PKR`,
+              [
+                {
+                  text: 'OK',
+                  onPress: () => navigation.navigate('CarpoolProfile', {
+                    userId,
+                    pickupLocation: pickupText,
+                    dropoffLocation: dropoffText
+                  })
+                }
+              ]
+            );
+          }}>
             {routeLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.bookText}>Book Ride</Text>}
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

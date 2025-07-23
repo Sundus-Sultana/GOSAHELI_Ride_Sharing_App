@@ -51,7 +51,7 @@ source={require('../../assets/bg.png')}
 const styles = StyleSheet.create({
   safeArea: {
   flex: 1,
-  backgroundColor: "#f0e5e5ff", // To match your header background
+  backgroundColor: "#e6e2e2ff", // To match your header background
 },
   background: {
     flex: 1,

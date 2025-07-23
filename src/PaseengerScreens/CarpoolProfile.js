@@ -9,14 +9,20 @@ import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-import { saveCarpoolProfile } from '../../api';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { saveCarpoolProfile,API_URL } from '../../api';
+import axios from 'axios';
+
 
 
 const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
 const CarpoolProfile = ({ route }) => {
-  const { userId, pickupLocation, dropoffLocation } = route.params || {};
+const { userId, pickupLocation, dropoffLocation, profileId } = route.params || {};
+const navigation = useNavigation();
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState({
@@ -46,14 +52,52 @@ const CarpoolProfile = ({ route }) => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   useEffect(() => {
-    if (route.params) {
+  const fetchProfileById = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/carpool/get-carpool-profile/${route.params.profileId}`);
+      const profile = res.data.data;
+
+      // Populate the form with data from the saved profile
       setRequest(prev => ({
         ...prev,
-        pickup: route.params.pickupLocation || prev.pickup,
-        dropoff: route.params.dropoffLocation || prev.dropoff
+        pickup: profile.pickup_location,
+        dropoff: profile.dropoff_location,
+        seatsNeeded: profile.seats.toString(),
+        date: new Date(profile.date),
+        smoking: profile.smoking_preference,
+        music: profile.music_preference,
+        conversation: profile.conversation_preference,
+        luggage: profile.allows_luggage,
+        recurring: profile.is_recurring,
+        daysOfWeek: profile.recurring_days?.split(',') || [],
+        specialRequests: profile.special_requests || ''
       }));
+
+      setRouteType(profile.route_type || 'One Way');
+      setPickupTime(new Date(`1970-01-01T${profile.pickup_time}`));
+      if (profile.route_type === 'Two Way' && profile.dropoff_time) {
+        setDropOffTime(new Date(`1970-01-01T${profile.dropoff_time}`));
+      }
+
+    } catch (error) {
+      console.error('Error fetching profile by ID:', error);
     }
-  }, [route.params]);
+  };
+
+  if (route.params?.profileId) {
+    // Load complete profile
+    fetchProfileById();
+  } else if (route.params?.pickupLocation || route.params?.dropoffLocation) {
+ setRequest(prev => ({
+  ...prev,
+  pickup: route.params.pickupLocation || prev.pickup,
+  dropoff: route.params.dropoffLocation || prev.dropoff
+}));
+
+  }
+  
+}, [route.params]);
+
 
   const handleTimeChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
@@ -176,14 +220,31 @@ const CarpoolProfile = ({ route }) => {
   };
 
   return (
+    <SafeAreaView style={styles.safeArea}>
+        <StatusBar backgroundColor="#d63384" barStyle="light-content" />
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
        <View style={styles.statusBar} />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Create your Carpool Profile</Text>
-      </View>
+<View style={styles.header}>
+<TouchableOpacity
+  onPress={() => {
+    const pickup = request.pickup?.trim();
+    const dropoff = request.dropoff?.trim();
+
+    navigation.navigate('Carpool', {
+      userId: userId,
+      pickupLocation: pickup,
+      dropoffLocation: dropoff
+    });
+  }}
+>
+  <Ionicons name="arrow-back" size={24} color="#070707ff" style={{ marginRight: 10, marginTop: -12 }} />
+</TouchableOpacity>
+  <Text style={styles.headerTitle}>Create your Carpool Profile</Text>
+</View>
+
       <ScrollView contentContainerStyle={styles.contentContainer}>
         
         {/* Route Type Toggle */}
@@ -506,10 +567,15 @@ const CarpoolProfile = ({ route }) => {
 </TouchableOpacity>
 
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+  flex: 1,
+  backgroundColor: "#fff", // To match your header background
+},
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   contentContainer: { padding: 20, paddingBottom: 40 },
   statusBar: {
@@ -743,7 +809,7 @@ const styles = StyleSheet.create({
   borderRadius: 8, 
   alignItems: 'center', 
   marginTop: 20,
-  marginBottom: 50,
+  marginBottom: 10,
   marginHorizontal: 20, // Add horizontal margin for better appearance
 },
 submitButtonText: { 

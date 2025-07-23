@@ -3,6 +3,30 @@ const router = express.Router();
 const client = require('../db');
 
 
+
+// Get a specific carpool profile by ID to use that profile
+router.get('/get-carpool-profile/:profileId', async (req, res) => {
+   const { profileId } = req.params;
+  console.log("Fetching profile for ID:", profileId);
+
+  try {
+    const result = await client.query(
+      'SELECT * FROM carpool_profile WHERE carpool_profile_id = $1',
+      [profileId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Profile not found' });
+    }
+
+    res.status(200).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching carpool profile:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch carpool profile' });
+  }
+});
+
+
 //fetch the saved carpool profiles
 router.get('/get-user-carpool-profiles/:userId', async (req, res) => {
   const userId = req.params.userId;
@@ -96,6 +120,33 @@ console.log("Final route_type going to DB:", route_type);
     res.status(500).json({
       success: false,
       message: 'Failed to save carpool profile',
+      error: error.message
+    });
+  }
+});
+
+
+
+// ✅ Delete carpool profile
+router.delete('/delete-carpool-profile/:profileId', async (req, res) => {
+  const { profileId } = req.params;
+
+  try {
+    const result = await client.query(
+      'DELETE FROM carpool_profile WHERE carpool_profile_id = $1',
+      [profileId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Profile not found' });
+    }
+
+    res.status(200).json({ success: true, message: 'Carpool profile deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting profile:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete carpool profile',
       error: error.message
     });
   }

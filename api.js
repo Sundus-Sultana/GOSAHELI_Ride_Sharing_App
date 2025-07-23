@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.22:5000';
+export const API_URL = 'http://192.168.100.12:5000';
 
 
 
@@ -115,6 +115,10 @@ export const getUserCarpoolProfiles = async (userId) => {
   return response.data;
 };
 
+// ✅ Delete carpool profile
+export const deleteCarpoolProfile = async (profileId) => {
+  return await axios.delete(`${API_URL}/api/carpool/delete-carpool-profile/${profileId}`);
+};
 
 
 

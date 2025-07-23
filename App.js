@@ -116,7 +116,11 @@ export default function App() {
       </NavigationContainer>
 
       {/* ✅ Toast UI */}
-      <Toast />
+     <Toast
+  position="bottom"
+  bottomOffset={60}
+  visibilityTime={3000}
+/>
     </>
   );
 }
