@@ -17,6 +17,7 @@ import Home from './src/PaseengerScreens/Home';
 import Carpool from './src/PaseengerScreens/Carpool';
 import CarpoolProfileList from './src/PaseengerScreens/CarpoolProfileList';
 import CarpoolProfile from './src/PaseengerScreens/CarpoolProfile';
+import CarpoolStatusScreen from './src/PaseengerScreens/CarpoolStatusScreen';
 import ChatUI from './src/PaseengerScreens/ChatUI';
 import about from './src/PaseengerScreens/about';
 import Support from './src/PaseengerScreens/Support';
@@ -53,9 +54,10 @@ export default function App() {
           <Stack.Screen name="Login" component={Login} options={{ headerShown: false }} />
           <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
           <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
-          <Stack.Screen name="Carpool" component={Carpool} />
+          <Stack.Screen name="Carpool" component={Carpool} options={{ headerShown: false }}  />
           <Stack.Screen name="CarpoolProfile" component={CarpoolProfile} options={{ headerShown: false }} />
              <Stack.Screen name="CarpoolProfileList" component={CarpoolProfileList} options={{ headerShown: false }} />
+          <Stack.Screen name="CarpoolStatusScreen" component={CarpoolStatusScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChatUI" component={ChatUI} options={{ headerShown: false }} />
           <Stack.Screen name="History" component={History} />
           <Stack.Screen name="Favourite" component={Favourite} />

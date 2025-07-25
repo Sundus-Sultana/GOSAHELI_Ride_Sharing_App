@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, StyleSheet,
   ScrollView, TouchableOpacity, KeyboardAvoidingView,
@@ -11,18 +11,18 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { saveCarpoolProfile,API_URL } from '../../api';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { saveCarpoolProfile, API_URL } from '../../api';
 import axios from 'axios';
-
-
 
 const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
-const CarpoolProfile = ({ route }) => {
-const { userId, pickupLocation, dropoffLocation, profileId } = route.params || {};
-const navigation = useNavigation();
+const CarpoolProfile = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { userId, pickupLocation, dropoffLocation, profileId } = route.params || {};
+  
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState({
@@ -48,56 +48,80 @@ const navigation = useNavigation();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeTimePickerFor, setActiveTimePickerFor] = useState(null);
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-  useEffect(() => {
-  const fetchProfileById = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/carpool/get-carpool-profile/${route.params.profileId}`);
-      const profile = res.data.data;
+useEffect(() => {
+  const initializeForm = async () => {
+    if (profileId) {
+      try {
+        const res = await axios.get(`${API_URL}/api/carpool/get-carpool-profile/${profileId}`);
+        const profile = res.data.data;
 
-      // Populate the form with data from the saved profile
-      setRequest(prev => ({
-        ...prev,
-        pickup: profile.pickup_location,
-        dropoff: profile.dropoff_location,
-        seatsNeeded: profile.seats.toString(),
-        date: new Date(profile.date),
-        smoking: profile.smoking_preference,
-        music: profile.music_preference,
-        conversation: profile.conversation_preference,
-        luggage: profile.allows_luggage,
-        recurring: profile.is_recurring,
-        daysOfWeek: profile.recurring_days?.split(',') || [],
-        specialRequests: profile.special_requests || ''
-      }));
+        setRequest(prev => ({
+          ...prev,
+          pickup: profile.pickup_location,
+          dropoff: profile.dropoff_location,
+          seatsNeeded: profile.seats.toString(),
+          date: new Date(profile.date),
+          smoking: profile.smoking_preference,
+          music: profile.music_preference,
+          conversation: profile.conversation_preference,
+          luggage: profile.allows_luggage,
+          recurring: profile.is_recurring,
+          daysOfWeek: profile.recurring_days?.split(',') || [],
+          specialRequests: profile.special_requests || ''
+        }));
 
-      setRouteType(profile.route_type || 'One Way');
-      setPickupTime(new Date(`1970-01-01T${profile.pickup_time}`));
-      if (profile.route_type === 'Two Way' && profile.dropoff_time) {
-        setDropOffTime(new Date(`1970-01-01T${profile.dropoff_time}`));
+        setRouteType(profile.route_type || 'One Way');
+        setPickupTime(new Date(`1970-01-01T${profile.pickup_time}`));
+        if (profile.route_type === 'Two Way' && profile.dropoff_time) {
+          setDropOffTime(new Date(`1970-01-01T${profile.dropoff_time}`));
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        Alert.alert("Error", "Failed to load profile data");
       }
+    } else {
+      // Initialize with default values first
+      const defaultFormState = {
+        pickup: '',
+        dropoff: '',
+        seatsNeeded: '1',
+        date: new Date(),
+        time: new Date(),
+        smoking: 'no-preference',
+        music: 'no-preference',
+        conversation: 'no-preference',
+        luggage: false,
+        recurring: false,
+        daysOfWeek: [],
+        specialRequests: ''
+      };
 
-    } catch (error) {
-      console.error('Error fetching profile by ID:', error);
+      // Merge with any incoming form state
+      const incomingState = route.params?.formState || {};
+      
+      setRequest(prev => ({
+        ...defaultFormState,
+        ...prev,
+        ...incomingState,
+        // Always override pickup and dropoff from params if they exist
+        pickup: pickupLocation || incomingState.pickup || prev.pickup,
+        dropoff: dropoffLocation || incomingState.dropoff || prev.dropoff,
+        // Ensure date is a Date object
+        date: incomingState.date ? new Date(incomingState.date) : prev.date
+      }));
     }
+
+    setIsInitialized(true);
   };
 
-  if (route.params?.profileId) {
-    // Load complete profile
-    fetchProfileById();
-  } else if (route.params?.pickupLocation || route.params?.dropoffLocation) {
- setRequest(prev => ({
-  ...prev,
-  pickup: route.params.pickupLocation || prev.pickup,
-  dropoff: route.params.dropoffLocation || prev.dropoff
-}));
-
+  if (!isInitialized) {
+    initializeForm();
   }
-  
-}, [route.params]);
-
+}, [pickupLocation, dropoffLocation, profileId, isInitialized, route.params?.formState]);
 
   const handleTimeChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
@@ -197,22 +221,18 @@ const navigation = useNavigation();
           route_type: routeType
         };
 
-        console.log('Sending payload:', profilePayload);
         const response = await saveCarpoolProfile(profilePayload);
-        console.log('Server response:', response);
         Alert.alert("Success", "Profile saved successfully!");
       }
+       // Navigate to CarpoolStatusScreen regardless of saveProfile value
+    navigation.navigate('CarpoolStatusScreen');
     } catch (error) {
-      console.error('Full error details:', {
-        message: error.message,
-        config: error.config,
-        response: error.response?.data
-      });
+      console.error('Error saving profile:', error);
       Alert.alert(
-        "Error", 
-        error.response?.data?.error || 
-        error.response?.data?.message || 
-        "Failed to save profile"
+        "Error",
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Failed to save profile. Please try again."
       );
     } finally {
       setIsSubmitting(false);
@@ -221,361 +241,370 @@ const navigation = useNavigation();
 
   return (
     <SafeAreaView style={styles.safeArea}>
-        <StatusBar backgroundColor="#d63384" barStyle="light-content" />
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-       <View style={styles.statusBar} />
-<View style={styles.header}>
+      <StatusBar backgroundColor="#d63384" barStyle="light-content" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <View style={styles.header}>
 <TouchableOpacity
   onPress={() => {
-    const pickup = request.pickup?.trim();
-    const dropoff = request.dropoff?.trim();
-
+    // Convert Date objects to ISO strings for serialization
+    const serializableState = {
+      ...request,
+      date: request.date.toISOString(),
+      time: request.time.toISOString()
+    };
+    
     navigation.navigate('Carpool', {
-      userId: userId,
-      pickupLocation: pickup,
-      dropoffLocation: dropoff
+      pickupLocation: request.pickup,
+      dropoffLocation: request.dropoff,
+      formState: serializableState
     });
   }}
 >
-  <Ionicons name="arrow-back" size={24} color="#070707ff" style={{ marginRight: 10, marginTop: -12 }} />
+  <Ionicons name="arrow-back" size={24} color="#070707ff" />
 </TouchableOpacity>
-  <Text style={styles.headerTitle}>Create your Carpool Profile</Text>
-</View>
-
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        
-        {/* Route Type Toggle */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              routeType === 'One Way' && styles.toggleButtonActiveLeft,
-            ]}
-            onPress={() => setRouteType('One Way')}
-          >
-            <Text
-              style={[
-                styles.toggleButtonText,
-                routeType === 'One Way' && styles.toggleButtonTextActive,
-              ]}
-            >
-              One Way
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              styles.toggleButtonRight,
-              routeType === 'Two Way' && styles.toggleButtonActiveRight,
-            ]}
-            onPress={() => setRouteType('Two Way')}
-          >
-            <Text
-              style={[
-                styles.toggleButtonText,
-                routeType === 'Two Way' && styles.toggleButtonTextActive,
-              ]}
-            >
-              Two Way
-            </Text>
-          </TouchableOpacity>
+           
+          <Text style={styles.headerTitle}>
+            {profileId ? 'Edit Carpool Profile' : 'Create Carpool Profile'}
+          </Text>
         </View>
 
-        <Text style={styles.officeReportTime}>*Office Report Time</Text>
-
-        {/* Location Card */}
-        <View style={styles.locationCard}>
-          <View style={styles.locationRow}>
-            <FontAwesome5 name="dot-circle" size={20} color={primaryColor} />
-            <TextInput
-              style={styles.locationInput}
-              value={request.pickup}
-              onChangeText={(text) => setRequest({ ...request, pickup: text })}
-              placeholder="Pickup location"
-              editable={false}
-              selectTextOnFocus={false}
-            />
-            <TouchableOpacity onPress={() => showPicker('pickup')}>
-              <Text style={styles.timeText}>{formatTime(pickupTime)}</Text>
+        <ScrollView contentContainerStyle={styles.contentContainer}>
+          {/* Route Type Toggle */}
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                routeType === 'One Way' && styles.toggleButtonActiveLeft,
+              ]}
+              onPress={() => setRouteType('One Way')}
+            >
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  routeType === 'One Way' && styles.toggleButtonTextActive,
+                ]}
+              >
+                One Way
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                styles.toggleButtonRight,
+                routeType === 'Two Way' && styles.toggleButtonActiveRight,
+              ]}
+              onPress={() => setRouteType('Two Way')}
+            >
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  routeType === 'Two Way' && styles.toggleButtonTextActive,
+                ]}
+              >
+                Two Way
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.directionArrowContainer}>
-            {routeType === 'Two Way' ? (
-              <Ionicons name="swap-vertical" size={20} color={"#000000"} style={{ marginRight: 300 }} />
-            ) : (
-              <Ionicons name="arrow-down" size={20} color={"#000000"} style={{ marginRight: 300 }} />
-            )}
-          </View>
+          <Text style={styles.officeReportTime}>*Office Report Time</Text>
 
-          <View style={styles.locationRow}>
-            <FontAwesome5 name="map-marker-alt" size={20} color={primaryColor} />
-            <TextInput
-              style={styles.locationInput}
-              value={request.dropoff}
-              onChangeText={(text) => setRequest({ ...request, dropoff: text })}
-              placeholder="Dropoff location"
-              editable={false}
-              selectTextOnFocus={false} 
-            />
-            {routeType === 'Two Way' ? (
-              <TouchableOpacity onPress={() => showPicker('dropoff')}>
-                <Text style={styles.timeText}>{formatTime(dropOffTime)}</Text>
+          {/* Location Card */}
+          <View style={styles.locationCard}>
+            <View style={styles.locationRow}>
+              <FontAwesome5 name="dot-circle" size={20} color={primaryColor} />
+              <TextInput
+                style={styles.locationInput}
+                value={request.pickup}
+                onChangeText={(text) => setRequest({ ...request, pickup: text })}
+                placeholder="Pickup location"
+                editable={false}
+                selectTextOnFocus={false}
+                 multiline={true}
+  numberOfLines={2}
+  textAlignVertical="top"
+              />
+              <TouchableOpacity onPress={() => showPicker('pickup')}>
+                <Text style={styles.timeText}>{formatTime(pickupTime)}</Text>
               </TouchableOpacity>
-            ) : (
-              <Text style={styles.timeTextInactive}>  </Text>
-            )}
-          </View>
-        </View>
+            </View>
 
-        {/* Time Pickers */}
-        <DateTimePickerModal
-          isVisible={showTimePicker}
-          mode="time"
-          onConfirm={(date) => handleTimeChange({ type: 'set' }, date)}
-          onCancel={() => setShowTimePicker(false)}
-          date={activeTimePickerFor === 'pickup' ? pickupTime : dropOffTime}
-          buttonTextColorIOS={primaryColor}
-          accentColor={primaryColor}
-          themeVariant="light"
-          customHeaderIOS={() => (
-            <View style={{
-              backgroundColor: primaryColor,
-              padding: 15,
-              borderTopLeftRadius: 10,
-              borderTopRightRadius: 10
-            }}>
-              <Text style={{ color: 'white', fontSize: 48, fontWeight: 'bold' }}>
-                {activeTimePickerFor === 'pickup' ? 'Pick Pickup Time' : 'Pick Dropoff Time'}
-              </Text>
+            <View style={styles.directionArrowContainer}>
+              {routeType === 'Two Way' ? (
+                <Ionicons name="swap-vertical" size={20} color={"#000000"} style={{ marginRight: 300 }} />
+              ) : (
+                <Ionicons name="arrow-down" size={20} color={"#000000"} style={{ marginRight: 300 }} />
+              )}
+            </View>
+
+            <View style={styles.locationRow}>
+              <FontAwesome5 name="map-marker-alt" size={20} color={primaryColor} />
+              <TextInput
+                style={styles.locationInput}
+                value={request.dropoff}
+                onChangeText={(text) => setRequest({ ...request, dropoff: text })}
+                placeholder="Dropoff location"
+                editable={false}
+                selectTextOnFocus={false} 
+                 multiline={true}
+  numberOfLines={2}
+  textAlignVertical="top"
+              />
+              {routeType === 'Two Way' ? (
+                <TouchableOpacity onPress={() => showPicker('dropoff')}>
+                  <Text style={styles.timeText}>{formatTime(dropOffTime)}</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.timeTextInactive}>  </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Time Pickers */}
+          <DateTimePickerModal
+            isVisible={showTimePicker}
+            mode="time"
+            onConfirm={(date) => handleTimeChange({ type: 'set' }, date)}
+            onCancel={() => setShowTimePicker(false)}
+            date={activeTimePickerFor === 'pickup' ? pickupTime : dropOffTime}
+            buttonTextColorIOS={primaryColor}
+            accentColor={primaryColor}
+            themeVariant="light"
+            customHeaderIOS={() => (
+              <View style={{
+                backgroundColor: primaryColor,
+                padding: 15,
+                borderTopLeftRadius: 10,
+                borderTopRightRadius: 10
+              }}>
+                <Text style={{ color: 'white', fontSize: 48, fontWeight: 'bold' }}>
+                  {activeTimePickerFor === 'pickup' ? 'Pick Pickup Time' : 'Pick Dropoff Time'}
+                </Text>
+              </View>
+            )}
+          />
+
+          {Platform.OS === 'android' && showAndroidPicker && (
+            <DateTimePicker
+              value={activeTimePickerFor === 'pickup' ? pickupTime : dropOffTime}
+              mode="time"
+              display="spinner"
+              onChange={handleTimeChange}
+              textColor={primaryColor}
+              themeVariant="light"
+              style={styles.androidPicker}
+            />
+          )}
+
+          {/* Seats Needed */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Seats Needed <Text style={{ color: "#c61a09" }}>*</Text>
+            </Text>
+            <View style={styles.pickerField}>
+              <Picker
+                selectedValue={request.seatsNeeded}
+                onValueChange={(itemValue) => setRequest({ ...request, seatsNeeded: itemValue })}
+                style={styles.picker}
+                dropdownIconColor="#D64584"
+              >
+                {[1, 2, 3, 4].map((num) => (
+                  <Picker.Item
+                    key={num}
+                    label={num.toString()}
+                    value={num.toString()}
+                    color="#050505"
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
+          {/* Date */}
+          <View style={styles.row}>
+            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text>{request.date.toLocaleDateString()}</Text>
+                <MaterialIcons name="calendar-today" size={20} color="#D64584" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {showDatePicker && (
+            <DateTimePicker
+              value={request.date}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              themeVariant="light"
+              textColor="#D64584"
+              accentColor="#D64584"
+              style={styles.pickerStyle}
+              positiveButton={{ label: 'OK', textColor: '#D64584' }}
+              negativeButton={{ label: 'Cancel', textColor: '#D64584' }}
+            />
+          )}
+
+          {/* Recurring */}
+          <View style={styles.switchContainer}>
+            <Text style={styles.label}>Recurring Ride</Text>
+            <Switch
+              value={request.recurring}
+              onValueChange={(value) => setRequest({ ...request, recurring: value })}
+              trackColor={{ false: "#767577", true: "#D64584" }}
+              thumbColor={request.recurring ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+
+          {request.recurring && (
+            <View style={styles.daysContainer}>
+              <Text style={styles.smallLabel}>Select days:</Text>
+              <View style={styles.daysRow}>
+                {days.map(day => (
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.dayButton,
+                      request.daysOfWeek.includes(day) && styles.dayButtonSelected
+                    ]}
+                    onPress={() => toggleDaySelection(day)}
+                  >
+                    <Text style={[
+                      styles.dayButtonText,
+                      request.daysOfWeek.includes(day) && styles.dayButtonTextSelected
+                    ]}>
+                      {day.substring(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
-        />
 
-        {Platform.OS === 'android' && showAndroidPicker && (
-          <DateTimePicker
-            value={activeTimePickerFor === 'pickup' ? pickupTime : dropOffTime}
-            mode="time"
-            display="spinner"
-            onChange={handleTimeChange}
-            textColor={primaryColor}
-            themeVariant="light"
-            style={styles.androidPicker}
-          />
-        )}
+          {/* Ride Preferences Toggle */}
+          <TouchableOpacity
+            style={styles.preferencesHeader}
+            onPress={() => setExpandedPreferences(!expandedPreferences)}
+          >
+            <Text style={styles.preferencesHeaderText}>Ride Preferences</Text>
+            <MaterialIcons
+              name={expandedPreferences ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={24}
+              color="#555"
+            />
+          </TouchableOpacity>
 
-        {/* Seats Needed */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Seats Needed <Text style={{ color: "#c61a09" }}>*</Text>
-          </Text>
-          <View style={styles.pickerField}>
-            <Picker
-              selectedValue={request.seatsNeeded}
-              onValueChange={(itemValue) => setRequest({ ...request, seatsNeeded: itemValue })}
-              style={styles.picker}
-              dropdownIconColor="#D64584"
-            >
-              {[1, 2, 3, 4].map((num) => (
-                <Picker.Item
-                  key={num}
-                  label={num.toString()}
-                  value={num.toString()}
-                  color="#050505"
-                />
-              ))}
-            </Picker>
-          </View>
-        </View>
-
-        {/* Date */}
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-            <Text style={styles.label}>Date</Text>
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text>{request.date.toLocaleDateString()}</Text>
-              <MaterialIcons name="calendar-today" size={20} color="#D64584" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        
-        {showDatePicker && (
-          <DateTimePicker
-            value={request.date}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            themeVariant="light"
-            textColor="#D64584"
-            accentColor="#D64584"
-            style={styles.pickerStyle}
-            positiveButton={{ label: 'OK', textColor: '#D64584' }}
-            negativeButton={{ label: 'Cancel', textColor: '#D64584' }}
-          />
-        )}
-
-        {/* Recurring */}
-        <View style={styles.switchContainer}>
-          <Text style={styles.label}>Recurring Ride</Text>
-          <Switch
-            value={request.recurring}
-            onValueChange={(value) => setRequest({ ...request, recurring: value })}
-            trackColor={{ false: "#767577", true: "#D64584" }}
-            thumbColor={request.recurring ? "#fff" : "#f4f3f4"}
-          />
-        </View>
-
-        {request.recurring && (
-          <View style={styles.daysContainer}>
-            <Text style={styles.smallLabel}>Select days:</Text>
-            <View style={styles.daysRow}>
-              {days.map(day => (
-                <TouchableOpacity
-                  key={day}
-                  style={[
-                    styles.dayButton,
-                    request.daysOfWeek.includes(day) && styles.dayButtonSelected
-                  ]}
-                  onPress={() => toggleDaySelection(day)}
+          {expandedPreferences && (
+            <>
+              {/* Smoking Preference */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Smoking Preference</Text>
+                <Picker
+                  selectedValue={request.smoking}
+                  onValueChange={(itemValue) => setRequest({ ...request, smoking: itemValue })}
+                  style={styles.picker}
+                  dropdownIconColor="#D64584"
                 >
-                  <Text style={[
-                    styles.dayButtonText,
-                    request.daysOfWeek.includes(day) && styles.dayButtonTextSelected
-                  ]}>
-                    {day.substring(0, 3)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  <Picker.Item label="No preference" value="no-preference" />
+                  <Picker.Item label="No smoking" value="no-smoking" />
+                  <Picker.Item label="Smoking allowed" value="smoking-allowed" />
+                </Picker>
+              </View>
+
+              {/* Music Preference */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Music Preference</Text>
+                <Picker
+                  selectedValue={request.music}
+                  onValueChange={(itemValue) => setRequest({ ...request, music: itemValue })}
+                  style={styles.picker}
+                  dropdownIconColor="#D64584"
+                >
+                  <Picker.Item label="No preference" value="no-preference" />
+                  <Picker.Item label="Quiet ride" value="quiet" />
+                  <Picker.Item label="Music OK" value="music-ok" />
+                </Picker>
+              </View>
+
+              {/* Conversation Preference */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Conversation</Text>
+                <Picker
+                  selectedValue={request.conversation}
+                  onValueChange={(itemValue) => setRequest({ ...request, conversation: itemValue })}
+                  style={styles.picker}
+                  dropdownIconColor="#D64584"
+                >
+                  <Picker.Item label="No preference" value="no-preference" />
+                  <Picker.Item label="Quiet ride" value="quiet" />
+                  <Picker.Item label="Chatting OK" value="chatting" />
+                </Picker>
+              </View>
+
+              {/* Luggage */}
+              <View style={styles.switchContainer}>
+                <Text style={styles.label}>Have Luggage</Text>
+                <Switch
+                  value={request.luggage}
+                  onValueChange={(value) => setRequest({ ...request, luggage: value })}
+                  trackColor={{ false: "#767577", true: "#D64584" }}
+                  thumbColor={request.luggage ? "#fff" : "#f4f3f4"}
+                />
+              </View>
+            </>
+          )}
+
+          {/* Special Requests */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Special Requests</Text>
+            <TextInput
+              style={[styles.input, styles.multilineInput]}
+              value={request.specialRequests}
+              onChangeText={(text) => setRequest({ ...request, specialRequests: text })}
+              placeholder="Any special requirements or notes for the driver"
+              multiline
+              numberOfLines={3}
+            />
           </View>
-        )}
+        
+          {/* Save Profile */}
+          <View style={styles.switchContainer}>
+            <Text style={styles.label}>Save Profile</Text>
+            <Switch
+              value={saveProfile}
+              onValueChange={(value) => setSaveProfile(value)}
+              trackColor={{ false: "#767577", true: "#D64584" }}
+              thumbColor={saveProfile ? "#fff" : "#f4f3f4"}
+            />
+          </View>
 
-        {/* Ride Preferences Toggle */}
+        </ScrollView>
+
         <TouchableOpacity
-          style={styles.preferencesHeader}
-          onPress={() => setExpandedPreferences(!expandedPreferences)}
+          style={styles.submitButton}
+          onPress={submitRequest}
+          disabled={isSubmitting}
         >
-          <Text style={styles.preferencesHeaderText}>Ride Preferences</Text>
-          <MaterialIcons
-            name={expandedPreferences ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-            size={24}
-            color="#555"
-          />
+          <Text style={styles.submitButtonText}>
+            {isSubmitting ? 'Submitting...' : (profileId ? 'Update Profile' : 'Find Carpool')}
+          </Text>
         </TouchableOpacity>
-
-        {expandedPreferences && (
-          <>
-            {/* Smoking Preference */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Smoking Preference</Text>
-              <Picker
-                selectedValue={request.smoking}
-                onValueChange={(itemValue) => setRequest({ ...request, smoking: itemValue })}
-                style={styles.picker}
-                dropdownIconColor="#D64584"
-              >
-                <Picker.Item label="No preference" value="no-preference" />
-                <Picker.Item label="No smoking" value="no-smoking" />
-                <Picker.Item label="Smoking allowed" value="smoking-allowed" />
-              </Picker>
-            </View>
-
-            {/* Music Preference */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Music Preference</Text>
-              <Picker
-                selectedValue={request.music}
-                onValueChange={(itemValue) => setRequest({ ...request, music: itemValue })}
-                style={styles.picker}
-                dropdownIconColor="#D64584"
-              >
-                <Picker.Item label="No preference" value="no-preference" />
-                <Picker.Item label="Quiet ride" value="quiet" />
-                <Picker.Item label="Music OK" value="music-ok" />
-              </Picker>
-            </View>
-
-            {/* Conversation Preference */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Conversation</Text>
-              <Picker
-                selectedValue={request.conversation}
-                onValueChange={(itemValue) => setRequest({ ...request, conversation: itemValue })}
-                style={styles.picker}
-                dropdownIconColor="#D64584"
-              >
-                <Picker.Item label="No preference" value="no-preference" />
-                <Picker.Item label="Quiet ride" value="quiet" />
-                <Picker.Item label="Chatting OK" value="chatting" />
-              </Picker>
-            </View>
-
-            {/* Luggage */}
-            <View style={styles.switchContainer}>
-              <Text style={styles.label}>Have Luggage</Text>
-              <Switch
-                value={request.luggage}
-                onValueChange={(value) => setRequest({ ...request, luggage: value })}
-                trackColor={{ false: "#767577", true: "#D64584" }}
-                thumbColor={request.luggage ? "#fff" : "#f4f3f4"}
-              />
-            </View>
-          </>
-        )}
-
-        {/* Special Requests */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Special Requests</Text>
-          <TextInput
-            style={[styles.input, styles.multilineInput]}
-            value={request.specialRequests}
-            onChangeText={(text) => setRequest({ ...request, specialRequests: text })}
-            placeholder="Any special requirements or notes for the driver"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-      
-
-      {/* Save Profile */}
-      <View style={styles.switchContainer}>
-        <Text style={styles.label}>Save Profile</Text>
-        <Switch
-          value={saveProfile}
-          onValueChange={(value) => setSaveProfile(value)}
-          trackColor={{ false: "#767577", true: "#D64584" }}
-          thumbColor={saveProfile ? "#fff" : "#f4f3f4"}
-        />
-      </View>
-
-      </ScrollView>
-
-      <TouchableOpacity
-  style={styles.submitButton}
-  onPress={submitRequest}
-  disabled={isSubmitting}
->
-  <Text style={styles.submitButtonText}>
-    {isSubmitting ? 'Submitting...' : 'Find Carpool'}
-  </Text>
-</TouchableOpacity>
-
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-    safeArea: {
-  flex: 1,
-  backgroundColor: "#fff", // To match your header background
-},
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   contentContainer: { padding: 20, paddingBottom: 40 },
   statusBar: {
@@ -592,13 +621,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   headerTitle: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  marginLeft: 16,
-  marginTop: -12,   // 👈 move text slightly upward
-  color: 'black',
-},
-
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 16,
+    marginTop: -12,
+    color: 'black',
+  },
   toggleContainer: {
     flexDirection: 'row',
     alignSelf: 'center',
@@ -804,20 +832,19 @@ const styles = StyleSheet.create({
     color: '#2c3e50' 
   },
   submitButton: { 
-  backgroundColor: '#D64584', 
-  padding: 16, 
-  borderRadius: 8, 
-  alignItems: 'center', 
-  marginTop: 20,
-  marginBottom: 10,
-  marginHorizontal: 20, // Add horizontal margin for better appearance
-},
-submitButtonText: { 
-  color: 'white', 
-  fontSize: 18, 
-  fontWeight: 'bold' 
-}
-
+    backgroundColor: '#D64584', 
+    padding: 16, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginTop: 20,
+    marginBottom: 10,
+    marginHorizontal: 20,
+  },
+  submitButtonText: { 
+    color: 'white', 
+    fontSize: 18, 
+    fontWeight: 'bold' 
+  }
 });
 
 export default CarpoolProfile;
