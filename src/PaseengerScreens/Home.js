@@ -58,6 +58,30 @@ const Home = ({ route }) => {
   }
 };
 
+const fetchPassengerIdAndNavigate = async () => {
+  try {
+    console.log("Calling:", `${API_URL}/api/get-passenger/${userId}`);
+    const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+    if (response.data.passenger?.PassengerID) {
+      const passengerId = response.data.passenger.PassengerID;
+      console.log("Fetched PassengerID:", passengerId);
+
+      // Navigate after getting PassengerID
+      navigation.navigate('Carpool', {
+        userName: userName || auth.currentUser?.displayName || 'User',
+        userEmail: auth.currentUser?.email,
+        userId: userId,
+        passengerId: passengerId,
+        riderId: route.params?.userId
+      });
+    } else {
+      Alert.alert("Error", "Passenger record not found.");
+    }
+  } catch (error) {
+    console.error("Error fetching PassengerID:", error.response?.data || error.message);
+    Alert.alert("Error", "Unable to fetch PassengerID. Please try again.");
+  }
+};
 
 
   const formatCurrency = (amount) => {
@@ -258,23 +282,17 @@ useEffect(() => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.toggleButton, activeTab === 'Carpool' && styles.activeToggle]}
-          onPress={() => {
-            setActiveTab('Carpool');
-            setTimeout(() => {
-              navigation.navigate('Carpool', {
-                userName: userName || auth.currentUser?.displayName || 'User',
-                userEmail: auth.currentUser?.email,
-                userId: userId,
-                riderId: route.params?.userId
-              });
-            }, 100);
-          }}
-        >
-          <Text style={[styles.toggleText, activeTab === 'Carpool' ? styles.activeToggleText : styles.inactiveToggleText]}>
-            Carpool
-          </Text>
-        </TouchableOpacity>
+  style={[styles.toggleButton, activeTab === 'Carpool' && styles.activeToggle]}
+  onPress={() => {
+    setActiveTab('Carpool');
+    fetchPassengerIdAndNavigate(); // 👈 Fetch PassengerID first
+  }}
+>
+  <Text style={[styles.toggleText, activeTab === 'Carpool' ? styles.activeToggleText : styles.inactiveToggleText]}>
+    Carpool
+  </Text>
+</TouchableOpacity>
+
       </View>
 
       {/* Ride History Section */}

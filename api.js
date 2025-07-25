@@ -109,6 +109,16 @@ export const saveCarpoolProfile = async (profileData) => {
     throw error;
   }
 };
+// ✅ Save carpool request
+export const saveCarpoolRequest = async (profileData) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/carpool/create-status-request`, profileData);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving carpool profile:', error);
+    throw error;
+  }
+};
 // ✅Get Saved carpool profile
 export const getUserCarpoolProfiles = async (userId) => {
   const response = await axios.get(`${API_URL}/api/carpool/get-user-carpool-profiles/${userId}`);

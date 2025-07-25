@@ -63,7 +63,8 @@ const mergeSuggestions = (arr1, arr2) => {
 };
 
 const Carpool = ({ route }) => {
-  const { userId } = route.params || {};
+  const { userId,passengerId } = route.params || {};
+  console.log("PassengerID:", passengerId);
   const mapRef = useRef(null);
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
@@ -369,7 +370,7 @@ const Carpool = ({ route }) => {
                 `Fare: ${price} PKR`,
                 [{
                   text: 'OK',
-                  onPress: () => navigation.navigate('CarpoolProfile', { userId, pickupLocation: pickupText, dropoffLocation: dropoffText })
+                  onPress: () => navigation.navigate('CarpoolProfile', { userId,passengerId, pickupLocation: pickupText, dropoffLocation: dropoffText })
                 }]
               );
             }}>

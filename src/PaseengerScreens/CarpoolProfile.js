@@ -12,7 +12,7 @@ import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { saveCarpoolProfile, API_URL } from '../../api';
+import { saveCarpoolProfile, API_URL, saveCarpoolRequest } from '../../api';
 import axios from 'axios';
 
 const primaryColor = '#D64584';
@@ -21,8 +21,8 @@ const lightGrey = '#E0E0E0';
 const CarpoolProfile = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId, pickupLocation, dropoffLocation, profileId } = route.params || {};
-  
+  const { userId, pickupLocation, dropoffLocation, profileId ,passengerId} = route.params || {};
+  console.log("PassengerID on Carpool Profile:", passengerId);
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState({
@@ -190,54 +190,79 @@ useEffect(() => {
     return `${hours}:${minutes}:00`;
   };
 
-  const submitRequest = async () => {
-    if (isSubmitting) return;
+const submitRequest = async () => {
+  if (isSubmitting) return;
 
-    const { pickup, dropoff, seatsNeeded, date } = request;
-    if (!pickup || !dropoff || !seatsNeeded || !date) {
-      Alert.alert("Error", "Please complete all required fields.");
-      return;
-    }
+  const { pickup, dropoff, seatsNeeded, date } = request;
+  if (!pickup || !dropoff || !seatsNeeded || !date) {
+    Alert.alert("Error", "Please complete all required fields.");
+    return;
+  }
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      if (saveProfile) {
-        const profilePayload = {
-          UserID: userId,
-          pickup_location: pickup,
-          dropoff_location: dropoff,
-          seats: parseInt(seatsNeeded),
-          date: date.toISOString().split('T')[0],
-          pickup_time: formatTimeForDB(pickupTime),
-          dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
-          smoking_preference: request.smoking,
-          music_preference: request.music,
-          conversation_preference: request.conversation,
-          allows_luggage: request.luggage,
-          is_recurring: request.recurring,
-          recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
-          special_requests: request.specialRequests || null,
-          route_type: routeType
-        };
+  try {
+    // Prepare common payload
+    const ridePayload = {
+      pickup_location: pickup,
+      dropoff_location: dropoff,
+      seats: parseInt(seatsNeeded),
+      date: date.toISOString().split('T')[0],
+      pickup_time: formatTimeForDB(pickupTime),
+      dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
+      smoking_preference: request.smoking,
+      music_preference: request.music,
+      conversation_preference: request.conversation,
+      allows_luggage: request.luggage,
+      is_recurring: request.recurring,
+      recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
+      special_requests: request.specialRequests || null,
+      route_type: routeType
+    };
 
-        const response = await saveCarpoolProfile(profilePayload);
+    let carpool_profile_id = null;
+
+    if (saveProfile) {
+      const profilePayload = {
+        UserID: userId,
+        ...ridePayload
+      };
+
+      const response = await saveCarpoolProfile(profilePayload);
+      if (response && response.data && response.data.data) {
+        carpool_profile_id = response.data.data.carpool_profile_id;
         Alert.alert("Success", "Profile saved successfully!");
       }
-       // Navigate to CarpoolStatusScreen regardless of saveProfile value
-    navigation.navigate('CarpoolStatusScreen');
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        "Failed to save profile. Please try again."
-      );
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+    let RequestID = null;
+
+    // Always create carpool status
+    const statusPayload = {
+      PassengerID: passengerId,
+      carpool_profile_id: carpool_profile_id || null,
+      ...ridePayload
+    };
+
+      const response = await saveCarpoolRequest(statusPayload);
+      if (response && response.data && response.data.data) {
+        RequestID = response.data.data.RequestID;}
+console.log("Ride Request ID:", RequestID);
+
+    // Navigate to status screen
+    navigation.navigate('CarpoolStatusScreen', { userId, passengerId });
+  } catch (error) {
+    console.error('Error saving profile or creating request:', error);
+    Alert.alert(
+      "Error",
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      "Failed to submit carpool request."
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   return (
     <SafeAreaView style={styles.safeArea}>

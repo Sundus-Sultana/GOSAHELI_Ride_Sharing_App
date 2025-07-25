@@ -49,7 +49,9 @@ const dummyData = {
   cancelled: []
 };
 
-const CarpoolStatusScreen = () => {
+const CarpoolStatusScreen = ({ route }) => {
+    const { userId,passengerId } = route.params || {};
+  console.log("PassengerID on status screen:", passengerId,userId);
   const [selectedTab, setSelectedTab] = useState('upcoming');
 
   const renderStatusBadge = (status) => {

@@ -58,6 +58,10 @@ app.use('/api', notificationRoutes);
 const becomePassengerRoute = require('./routes/becomePassenger');
 app.use('/api/become-passenger', becomePassengerRoute);
 
+const getPassengerByUserId = require('./routes/getPassengerByUserId');
+app.use('/api/get-passenger', getPassengerByUserId);
+
+
 //  Become Driver
 const becomeDriverRoute = require('./routes/becomeDriver');
 app.use('/become-driver', becomeDriverRoute);
