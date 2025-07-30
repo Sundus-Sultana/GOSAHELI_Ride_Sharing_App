@@ -15,7 +15,7 @@ import { auth } from '../firebase/setup';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadProfilePhoto, getUserPhoto, getRideHistory,API_URL } from '../../api.js';
 
-const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,userName}) => {
+const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,passengerId,userName}) => {
   const [photoURL, setPhotoURL] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -226,10 +226,10 @@ const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,userName})
                     style={styles.menuItem}
                     onPress={() => {
                       closeModal();
-                      navigation.navigate('Carpool');
+                      navigation.navigate('CarpoolStatusScreen', { userId ,passengerId});
                     }}
                   >
-                    <Text style={styles.menuText}>Carpool</Text>
+                    <Text style={styles.menuText}>My Carpools</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity

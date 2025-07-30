@@ -64,7 +64,8 @@ router.post('/save-profile', async (req, res) => {
       is_recurring,
       recurring_days,
       special_requests,
-      route_type
+      route_type,
+      fare
     } = req.body;
 
 console.log("Final route_type going to DB:", route_type);
@@ -85,8 +86,9 @@ console.log("Final route_type going to DB:", route_type);
     is_recurring,
     recurring_days,
     special_requests,
-    route_type
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    route_type,
+    fare
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16)
   RETURNING carpool_profile_id;
 `;
 
@@ -105,7 +107,8 @@ console.log("Final route_type going to DB:", route_type);
       is_recurring,
       recurring_days,
       special_requests || null,
-      route_type
+      route_type,
+      req.body.fare || null 
     ];
 
     const result = await client.query(query, values);
@@ -200,12 +203,13 @@ router.post('/create-status-request', async (req, res) => {
         is_recurring,
         recurring_days,
         special_requests,
-        route_type
+        route_type,
+        fare
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19
+        $16, $17, $18, $19,$20
       )
       RETURNING *;
       `,
@@ -228,7 +232,8 @@ router.post('/create-status-request', async (req, res) => {
         is_recurring,
         recurring_days,
         special_requests,
-        route_type
+        route_type,
+         req.body.fare || null 
       ]
     );
 
@@ -246,6 +251,68 @@ router.post('/create-status-request', async (req, res) => {
     });
   }
 });
+
+// ✅ Delete carpool request 
+// ✅ Delete carpool request 
+router.delete('/delete-status-request/:requestId', async (req, res) => {
+  const { requestId } = req.params;
+
+  try {
+    // First verify the request exists
+    const checkResult = await client.query(
+      'SELECT * FROM "Carpool_Request_Status" WHERE "RequestID" = $1',
+      [requestId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Ride request not found' 
+      });
+    }
+
+    // Then delete it
+    const deleteResult = await client.query(
+      'DELETE FROM "Carpool_Request_Status" WHERE "RequestID" = $1 RETURNING *',
+      [requestId]
+    );
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Ride request deleted successfully',
+      data: deleteResult.rows[0] 
+    });
+  } catch (error) {
+    console.error('Error deleting ride request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete ride request',
+      error: error.message,
+      stack: error.stack // Include stack trace for debugging
+    });
+  }
+});
+
+// ✅ Get all carpool requests for a passenger
+router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
+  const { passengerId } = req.params;
+
+  console.log("🔍 Received PassengerID:", passengerId); // Debug log
+
+  try {
+    const result = await client.query(
+      `SELECT * FROM "Carpool_Request_Status" WHERE "PassengerID" = $1 ORDER BY "RequestID" DESC`,
+      [passengerId]
+    );
+
+    console.log("✅ Query result:", result.rows); // Debug log
+    res.status(200).json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('❌ Error fetching passenger requests:', error.message); // Better error log
+    res.status(500).json({ success: false, message: 'Failed to fetch requests', error: error.message });
+  }
+});
+
 
 
 module.exports = router;

@@ -7,7 +7,7 @@ export default function LandingActivity({ navigation }) {
 
   return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar backgroundColor="#000000ff" barStyle="light-content" />
+        <StatusBar backgroundColor="#D64584" barStyle="light-content" />
     <ImageBackground
 source={require('../../assets/bg.png')}
       style={styles.background}
@@ -51,7 +51,7 @@ source={require('../../assets/bg.png')}
 const styles = StyleSheet.create({
   safeArea: {
   flex: 1,
-  backgroundColor: "#e6e2e2ff", // To match your header background
+  backgroundColor: "#e3e0e0ff", // To match your header background
 },
   background: {
     flex: 1,

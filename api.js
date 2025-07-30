@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.17:5000';
+export const API_URL = 'http://192.168.100.22:5000';
 
 
 
@@ -119,6 +119,28 @@ export const saveCarpoolRequest = async (profileData) => {
     throw error;
   }
 };
+
+// ✅ Fetch carpool requests by PassengerID
+export const getCarpoolRequestsByPassenger = async (passengerId) => {
+  try {
+    const res = await axios.get(`${API_URL}/api/carpool/get-status-by-passenger/${passengerId}`);
+    return res.data;
+  } catch (err) {
+    console.error('Error fetching ride requests:', err);
+    throw err;
+  }
+};
+export const deleteCarpoolRequest = async (requestId) => {
+  try {
+    const res = await axios.delete(`${API_URL}/api/carpool/delete-status-request/${requestId}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error deleting carpool request:', error);
+    throw error;
+  }
+};
+
+
 // ✅Get Saved carpool profile
 export const getUserCarpoolProfiles = async (userId) => {
   const response = await axios.get(`${API_URL}/api/carpool/get-user-carpool-profiles/${userId}`);

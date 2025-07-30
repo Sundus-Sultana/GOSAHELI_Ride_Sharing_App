@@ -370,7 +370,7 @@ const Carpool = ({ route }) => {
                 `Fare: ${price} PKR`,
                 [{
                   text: 'OK',
-                  onPress: () => navigation.navigate('CarpoolProfile', { userId,passengerId, pickupLocation: pickupText, dropoffLocation: dropoffText })
+                  onPress: () => navigation.navigate('CarpoolProfile', { userId,passengerId, pickupLocation: pickupText, dropoffLocation: dropoffText ,price})
                 }]
               );
             }}>

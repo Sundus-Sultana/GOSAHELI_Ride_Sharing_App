@@ -32,6 +32,7 @@ import { API_URL } from '../../api.js';
 
 const Home = ({ route }) => {
   const navigation = useNavigation();
+  const [passengerId, setPassengerId] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('BookRide');
   const [rideHistory, setRideHistory] = useState([]);
@@ -43,6 +44,26 @@ const Home = ({ route }) => {
   // Always prioritize route.params.userId if provided
   const userId = route?.params?.userId ?? auth.currentUser?.uid;
   const userName = route?.params?.userName ?? auth.currentUser?.displayName;
+
+  useEffect(() => {
+  const fetchPassengerId = async () => {
+    if (!userId) return;
+    try {
+      const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+      if (response.data.passenger?.PassengerID) {
+        setPassengerId(response.data.passenger.PassengerID);
+        console.log("PassengerID set in state:", response.data.passenger.PassengerID);
+      }
+    } catch (error) {
+      console.error("Error fetching PassengerID:", error);
+    }
+  };
+
+  fetchPassengerId();
+}, [userId]); // Dependency on userId
+
+
+
 
  const insertPassenger = async (id) => {
   console.log('🛫 insertPassenger() called with:', id); // <--- Add this
@@ -65,6 +86,8 @@ const fetchPassengerIdAndNavigate = async () => {
     if (response.data.passenger?.PassengerID) {
       const passengerId = response.data.passenger.PassengerID;
       console.log("Fetched PassengerID:", passengerId);
+       setPassengerId(passengerId); 
+        console.log("set passenger ID:", passengerId);
 
       // Navigate after getting PassengerID
       navigation.navigate('Carpool', {
@@ -240,6 +263,8 @@ useEffect(() => {
         navigation={navigation}
         userId={userId}
         userName={userName}
+        passengerId={passengerId}
+        
       />
 
 

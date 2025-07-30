@@ -21,8 +21,10 @@ const lightGrey = '#E0E0E0';
 const CarpoolProfile = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId, pickupLocation, dropoffLocation, profileId ,passengerId} = route.params || {};
+  const { userId, pickupLocation, dropoffLocation, profileId, passengerId, price } = route.params || {};
   console.log("PassengerID on Carpool Profile:", passengerId);
+  console.log("Price on Carpool Profile:", price);
+
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [request, setRequest] = useState({
@@ -37,7 +39,7 @@ const CarpoolProfile = () => {
     luggage: false,
     recurring: false,
     daysOfWeek: [],
-    specialRequests: ''
+    specialRequests: '',
   });
 
   const [expandedPreferences, setExpandedPreferences] = useState(false);
@@ -52,76 +54,77 @@ const CarpoolProfile = () => {
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-useEffect(() => {
-  const initializeForm = async () => {
-    if (profileId) {
-      try {
-        const res = await axios.get(`${API_URL}/api/carpool/get-carpool-profile/${profileId}`);
-        const profile = res.data.data;
+  useEffect(() => {
+    const initializeForm = async () => {
+      if (profileId) {
+        try {
+          const res = await axios.get(`${API_URL}/api/carpool/get-carpool-profile/${profileId}`);
+          const profile = res.data.data;
+
+          setRequest(prev => ({
+            ...prev,
+            pickup: profile.pickup_location,
+            dropoff: profile.dropoff_location,
+            seatsNeeded: profile.seats.toString(),
+            date: new Date(profile.date),
+            smoking: profile.smoking_preference,
+            music: profile.music_preference,
+            conversation: profile.conversation_preference,
+            luggage: profile.allows_luggage,
+            recurring: profile.is_recurring,
+            daysOfWeek: profile.recurring_days?.split(',') || [],
+            specialRequests: profile.special_requests || '',
+            fare:price
+          }));
+
+          setRouteType(profile.route_type || 'One Way');
+          setPickupTime(new Date(`1970-01-01T${profile.pickup_time}`));
+          if (profile.route_type === 'Two Way' && profile.dropoff_time) {
+            setDropOffTime(new Date(`1970-01-01T${profile.dropoff_time}`));
+          }
+        } catch (error) {
+          console.error('Error fetching profile:', error);
+          Alert.alert("Error", "Failed to load profile data");
+        }
+      } else {
+        // Initialize with default values first
+        const defaultFormState = {
+          pickup: '',
+          dropoff: '',
+          seatsNeeded: '1',
+          date: new Date(),
+          time: new Date(),
+          smoking: 'no-preference',
+          music: 'no-preference',
+          conversation: 'no-preference',
+          luggage: false,
+          recurring: false,
+          daysOfWeek: [],
+          specialRequests: ''
+        };
+
+        // Merge with any incoming form state
+        const incomingState = route.params?.formState || {};
 
         setRequest(prev => ({
+          ...defaultFormState,
           ...prev,
-          pickup: profile.pickup_location,
-          dropoff: profile.dropoff_location,
-          seatsNeeded: profile.seats.toString(),
-          date: new Date(profile.date),
-          smoking: profile.smoking_preference,
-          music: profile.music_preference,
-          conversation: profile.conversation_preference,
-          luggage: profile.allows_luggage,
-          recurring: profile.is_recurring,
-          daysOfWeek: profile.recurring_days?.split(',') || [],
-          specialRequests: profile.special_requests || ''
+          ...incomingState,
+          // Always override pickup and dropoff from params if they exist
+          pickup: pickupLocation || incomingState.pickup || prev.pickup,
+          dropoff: dropoffLocation || incomingState.dropoff || prev.dropoff,
+          // Ensure date is a Date object
+          date: incomingState.date ? new Date(incomingState.date) : prev.date
         }));
-
-        setRouteType(profile.route_type || 'One Way');
-        setPickupTime(new Date(`1970-01-01T${profile.pickup_time}`));
-        if (profile.route_type === 'Two Way' && profile.dropoff_time) {
-          setDropOffTime(new Date(`1970-01-01T${profile.dropoff_time}`));
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        Alert.alert("Error", "Failed to load profile data");
       }
-    } else {
-      // Initialize with default values first
-      const defaultFormState = {
-        pickup: '',
-        dropoff: '',
-        seatsNeeded: '1',
-        date: new Date(),
-        time: new Date(),
-        smoking: 'no-preference',
-        music: 'no-preference',
-        conversation: 'no-preference',
-        luggage: false,
-        recurring: false,
-        daysOfWeek: [],
-        specialRequests: ''
-      };
 
-      // Merge with any incoming form state
-      const incomingState = route.params?.formState || {};
-      
-      setRequest(prev => ({
-        ...defaultFormState,
-        ...prev,
-        ...incomingState,
-        // Always override pickup and dropoff from params if they exist
-        pickup: pickupLocation || incomingState.pickup || prev.pickup,
-        dropoff: dropoffLocation || incomingState.dropoff || prev.dropoff,
-        // Ensure date is a Date object
-        date: incomingState.date ? new Date(incomingState.date) : prev.date
-      }));
+      setIsInitialized(true);
+    };
+
+    if (!isInitialized) {
+      initializeForm();
     }
-
-    setIsInitialized(true);
-  };
-
-  if (!isInitialized) {
-    initializeForm();
-  }
-}, [pickupLocation, dropoffLocation, profileId, isInitialized, route.params?.formState]);
+  }, [pickupLocation, dropoffLocation, profileId, isInitialized, route.params?.formState]);
 
   const handleTimeChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
@@ -190,78 +193,81 @@ useEffect(() => {
     return `${hours}:${minutes}:00`;
   };
 
-const submitRequest = async () => {
-  if (isSubmitting) return;
+  const submitRequest = async () => {
+    if (isSubmitting) return;
 
-  const { pickup, dropoff, seatsNeeded, date } = request;
-  if (!pickup || !dropoff || !seatsNeeded || !date) {
-    Alert.alert("Error", "Please complete all required fields.");
-    return;
-  }
+    const { pickup, dropoff, seatsNeeded, date } = request;
+    if (!pickup || !dropoff || !seatsNeeded || !date) {
+      Alert.alert("Error", "Please complete all required fields.");
+      return;
+    }
 
-  setIsSubmitting(true);
+    setIsSubmitting(true);
 
-  try {
-    // Prepare common payload
-    const ridePayload = {
-      pickup_location: pickup,
-      dropoff_location: dropoff,
-      seats: parseInt(seatsNeeded),
-      date: date.toISOString().split('T')[0],
-      pickup_time: formatTimeForDB(pickupTime),
-      dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
-      smoking_preference: request.smoking,
-      music_preference: request.music,
-      conversation_preference: request.conversation,
-      allows_luggage: request.luggage,
-      is_recurring: request.recurring,
-      recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
-      special_requests: request.specialRequests || null,
-      route_type: routeType
-    };
-
-    let carpool_profile_id = null;
-
-    if (saveProfile) {
-      const profilePayload = {
-        UserID: userId,
-        ...ridePayload
+    try {
+      // Prepare common payload
+      const ridePayload = {
+        pickup_location: pickup,
+        dropoff_location: dropoff,
+        seats: parseInt(seatsNeeded),
+        date: date.toISOString().split('T')[0],
+        pickup_time: formatTimeForDB(pickupTime),
+        dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
+        smoking_preference: request.smoking,
+        music_preference: request.music,
+        conversation_preference: request.conversation,
+        allows_luggage: request.luggage,
+        is_recurring: request.recurring,
+        recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
+        special_requests: request.specialRequests || null,
+        route_type: routeType
       };
 
-      const response = await saveCarpoolProfile(profilePayload);
-      if (response && response.data && response.data.data) {
-        carpool_profile_id = response.data.data.carpool_profile_id;
-        Alert.alert("Success", "Profile saved successfully!");
-      }
-    }
-    let RequestID = null;
+      let carpool_profile_id = null;
 
-    // Always create carpool status
-    const statusPayload = {
-      PassengerID: passengerId,
-      carpool_profile_id: carpool_profile_id || null,
-      ...ridePayload
-    };
+      if (saveProfile) {
+        const profilePayload = {
+          UserID: userId,
+          ...ridePayload,
+          fare: price 
+        };
+
+        const response = await saveCarpoolProfile(profilePayload);
+        if (response && response.data && response.data.data) {
+          carpool_profile_id = response.data.data.carpool_profile_id;
+          Alert.alert("Success", "Profile saved successfully!");
+        }
+      }
+      let RequestID = null;
+
+      // Always create carpool status
+      const statusPayload = {
+        PassengerID: passengerId,
+        carpool_profile_id: carpool_profile_id || null,
+        ...ridePayload,
+        fare: price 
+      };
 
       const response = await saveCarpoolRequest(statusPayload);
       if (response && response.data && response.data.data) {
-        RequestID = response.data.data.RequestID;}
-console.log("Ride Request ID:", RequestID);
+        RequestID = response.data.data.RequestID;
+      }
+      console.log("Ride Request ID:", RequestID);
 
-    // Navigate to status screen
-    navigation.navigate('CarpoolStatusScreen', { userId, passengerId });
-  } catch (error) {
-    console.error('Error saving profile or creating request:', error);
-    Alert.alert(
-      "Error",
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      "Failed to submit carpool request."
-    );
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      // Navigate to status screen
+      navigation.navigate('CarpoolStatusScreen', { userId, passengerId, price });
+    } catch (error) {
+      console.error('Error saving profile or creating request:', error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Failed to submit carpool request."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
 
   return (
@@ -272,25 +278,25 @@ console.log("Ride Request ID:", RequestID);
         style={styles.container}
       >
         <View style={styles.header}>
-<TouchableOpacity
-  onPress={() => {
-    // Convert Date objects to ISO strings for serialization
-    const serializableState = {
-      ...request,
-      date: request.date.toISOString(),
-      time: request.time.toISOString()
-    };
-    
-    navigation.navigate('Carpool', {
-      pickupLocation: request.pickup,
-      dropoffLocation: request.dropoff,
-      formState: serializableState
-    });
-  }}
->
-  <Ionicons name="arrow-back" size={24} color="#070707ff" />
-</TouchableOpacity>
-           
+          <TouchableOpacity
+            onPress={() => {
+              // Convert Date objects to ISO strings for serialization
+              const serializableState = {
+                ...request,
+                date: request.date.toISOString(),
+                time: request.time.toISOString()
+              };
+
+              navigation.navigate('Carpool', {
+                pickupLocation: request.pickup,
+                dropoffLocation: request.dropoff,
+                formState: serializableState
+              });
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#070707ff" />
+          </TouchableOpacity>
+
           <Text style={styles.headerTitle}>
             {profileId ? 'Edit Carpool Profile' : 'Create Carpool Profile'}
           </Text>
@@ -347,9 +353,9 @@ console.log("Ride Request ID:", RequestID);
                 placeholder="Pickup location"
                 editable={false}
                 selectTextOnFocus={false}
-                 multiline={true}
-  numberOfLines={2}
-  textAlignVertical="top"
+                multiline={true}
+                numberOfLines={2}
+                textAlignVertical="top"
               />
               <TouchableOpacity onPress={() => showPicker('pickup')}>
                 <Text style={styles.timeText}>{formatTime(pickupTime)}</Text>
@@ -372,10 +378,10 @@ console.log("Ride Request ID:", RequestID);
                 onChangeText={(text) => setRequest({ ...request, dropoff: text })}
                 placeholder="Dropoff location"
                 editable={false}
-                selectTextOnFocus={false} 
-                 multiline={true}
-  numberOfLines={2}
-  textAlignVertical="top"
+                selectTextOnFocus={false}
+                multiline={true}
+                numberOfLines={2}
+                textAlignVertical="top"
               />
               {routeType === 'Two Way' ? (
                 <TouchableOpacity onPress={() => showPicker('dropoff')}>
@@ -460,7 +466,7 @@ console.log("Ride Request ID:", RequestID);
               </TouchableOpacity>
             </View>
           </View>
-          
+
           {showDatePicker && (
             <DateTimePicker
               value={request.date}
@@ -537,8 +543,8 @@ console.log("Ride Request ID:", RequestID);
                   dropdownIconColor="#D64584"
                 >
                   <Picker.Item label="No preference" value="no-preference" />
-                  <Picker.Item label="No smoking" value="no-smoking" />
-                  <Picker.Item label="Smoking allowed" value="smoking-allowed" />
+                  <Picker.Item label="No smoking" value="No Smoking" />
+                  <Picker.Item label="Smoking allowed" value="can smoke" />
                 </Picker>
               </View>
 
@@ -552,8 +558,8 @@ console.log("Ride Request ID:", RequestID);
                   dropdownIconColor="#D64584"
                 >
                   <Picker.Item label="No preference" value="no-preference" />
-                  <Picker.Item label="Quiet ride" value="quiet" />
-                  <Picker.Item label="Music OK" value="music-ok" />
+                  <Picker.Item label="Quiet ride" value="Quiet ride" />
+                  <Picker.Item label="Music OK" value="Music Ok!" />
                 </Picker>
               </View>
 
@@ -567,8 +573,8 @@ console.log("Ride Request ID:", RequestID);
                   dropdownIconColor="#D64584"
                 >
                   <Picker.Item label="No preference" value="no-preference" />
-                  <Picker.Item label="Quiet ride" value="quiet" />
-                  <Picker.Item label="Chatting OK" value="chatting" />
+                  <Picker.Item label="Quiet ride" value="Quiet Ride" />
+                  <Picker.Item label="Chatting OK" value="chatting OK" />
                 </Picker>
               </View>
 
@@ -597,7 +603,7 @@ console.log("Ride Request ID:", RequestID);
               numberOfLines={3}
             />
           </View>
-        
+
           {/* Save Profile */}
           <View style={styles.switchContainer}>
             <Text style={styles.label}>Save Profile</Text>
@@ -802,73 +808,73 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  switchContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    backgroundColor: 'white', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 16 
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16
   },
-  daysContainer: { 
-    backgroundColor: 'white', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 16 
+  daysContainer: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16
   },
-  daysRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 8 
+  daysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8
   },
-  dayButton: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 20, 
-    borderWidth: 1, 
-    borderColor: '#ddd', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  dayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  dayButtonSelected: { 
-    backgroundColor: '#D64584', 
-    borderColor: '#D64584' 
+  dayButtonSelected: {
+    backgroundColor: '#D64584',
+    borderColor: '#D64584'
   },
-  dayButtonText: { 
-    fontSize: 12, 
-    color: '#555' 
+  dayButtonText: {
+    fontSize: 12,
+    color: '#555'
   },
-  dayButtonTextSelected: { 
-    color: 'white' 
+  dayButtonTextSelected: {
+    color: 'white'
   },
-  preferencesHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    backgroundColor: 'white', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 16 
+  preferencesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16
   },
-  preferencesHeaderText: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    color: '#2c3e50' 
+  preferencesHeaderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50'
   },
-  submitButton: { 
-    backgroundColor: '#D64584', 
-    padding: 16, 
-    borderRadius: 8, 
-    alignItems: 'center', 
+  submitButton: {
+    backgroundColor: '#D64584',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
     marginTop: 20,
     marginBottom: 10,
     marginHorizontal: 20,
   },
-  submitButtonText: { 
-    color: 'white', 
-    fontSize: 18, 
-    fontWeight: 'bold' 
+  submitButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold'
   }
 });
 

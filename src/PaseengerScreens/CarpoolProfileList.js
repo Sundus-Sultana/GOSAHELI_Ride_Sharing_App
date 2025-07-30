@@ -50,34 +50,34 @@ const CarpoolProfileList = ({ route, navigation }) => {
 
   // ✅ Delete with UI update + alert
   const handleDelete = (profileId) => {
-  Alert.alert(
-    'Delete Profile',
-    'Are you sure you want to delete this carpool profile?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, Delete',
-        onPress: async () => {
-          try {
-            await axios.delete(`${API_URL}/api/carpool/delete-carpool-profile/${profileId}`);
-            setProfiles(prev => prev.filter(item => item.carpool_profile_id !== profileId));
-            Toast.show({
-              type: 'success',
-              text1: 'Deleted',
-              text2: 'Carpool profile removed successfully.'
-            });
-          } catch (err) {
-            Toast.show({
-              type: 'error',
-              text1: 'Error',
-              text2: 'Failed to delete profile.'
-            });
+    Alert.alert(
+      'Delete Profile',
+      'Are you sure you want to delete this carpool profile?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Delete',
+          onPress: async () => {
+            try {
+              await axios.delete(`${API_URL}/api/carpool/delete-carpool-profile/${profileId}`);
+              setProfiles(prev => prev.filter(item => item.carpool_profile_id !== profileId));
+              Toast.show({
+                type: 'success',
+                text1: 'Deleted',
+                text2: 'Carpool profile removed successfully.'
+              });
+            } catch (err) {
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to delete profile.'
+              });
+            }
           }
         }
-      }
-    ]
-  );
-};
+      ]
+    );
+  };
 
 
   const renderCard = ({ item }) => {
@@ -227,21 +227,21 @@ const CarpoolProfileList = ({ route, navigation }) => {
                   </View>
                 )}
               </ScrollView>
-{/* Use Button (FIXED at bottom) */}
-        <TouchableOpacity
-          style={styles.useBtnFixed}
-          onPress={() => {
-            navigation.navigate("CarpoolProfile", { profileId: selectedProfile.carpool_profile_id });
-            setSelectedProfile(null);
-          }}
-        >
-          <Text style={styles.useBtnText}>Use this Profile</Text>
-        </TouchableOpacity>
+              {/* Use Button (FIXED at bottom) */}
+              <TouchableOpacity
+                style={styles.useBtnFixed}
+                onPress={() => {
+                  navigation.navigate("CarpoolProfile", { profileId: selectedProfile.carpool_profile_id });
+                  setSelectedProfile(null);
+                }}
+              >
+                <Text style={styles.useBtnText}>Use this Profile</Text>
+              </TouchableOpacity>
 
-        {/* Close (X) icon */}
-        <TouchableOpacity onPress={() => setSelectedProfile(null)} style={styles.crossIcon}>
-          <Ionicons name="close" size={26} color="#333" />
-        </TouchableOpacity>
+              {/* Close (X) icon */}
+              <TouchableOpacity onPress={() => setSelectedProfile(null)} style={styles.crossIcon}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
             </Animatable.View>
           </View>
         </View>
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   dayBadge: { backgroundColor: primaryColor, borderRadius: 20, paddingVertical: 4, paddingHorizontal: 10 },
   dayText: { color: '#fff', fontSize: 13 },
   btnRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  deleteBtn: { backgroundColor: '#E74C3C', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5 },
+  deleteBtn: { backgroundColor: '#D64584', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5 },
   seeFullBtn: { backgroundColor: primaryColor, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 5 },
   seeFullText: { color: '#fff', fontSize: 14 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center' },
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   routeTypeText: { color: '#fff', fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' },
   useBtnFixed: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: primaryColor, padding: 15, alignItems: 'center', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
   useBtnText: { color: 'white', fontWeight: 'bold' },
-  crossIcon: {position: 'absolute',top: 15,right: 15,zIndex: 100}
+  crossIcon: { position: 'absolute', top: 15, right: 15, zIndex: 100 }
 });
 
 export default CarpoolProfileList;
