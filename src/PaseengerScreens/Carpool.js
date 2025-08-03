@@ -11,10 +11,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 const MAPBOX_TOKEN = 'pk.eyJ1Ijoic3VuZHVzc3VsdGFuYSIsImEiOiJjbWFzYXd6MXYwZHdjMnFzNW51OHFxbW1iIn0.3WX-TCF91Jh3Go-pjGwAOg';
-const BASE_FARE_PKR = 100;
-const PER_KM_RATE_PKR = 30;
 const bboxIslamabadRawalpindi = '72.8,33.4,73.3,33.9';
-
+// Carpool Pricing Constants (exported for use in CarpoolProfile)
+export const CARPOOL_PRICE_PARAMS = {
+  FUEL_PRICE_PER_LITER: 264.61, // Current Pakistan petrol price
+  AVERAGE_MILEAGE: 15, // km/L
+  DRIVER_PROFIT_MARGIN:0.03, //20%
+  APP_COMMISSION: 0.10, // 10%
+  PEAK_HOUR_SURCHARGE: 0.20, // 20% extra during peak hours
+  PEAK_HOURS: [7, 9, 17, 19], // 7-9AM and 5-7PM
+  BASE_COST_PER_KM: 5, // PKR per km to cover maintenance/other costs
+  MINIMUM_FARE: 80 // PKR minimum per passenger (only for very short trips)
+};   
 // Urdu→English replacements
 const urduToEnglishDict = {
   "مسجد": "Mosque",
@@ -40,7 +48,6 @@ const cleanAddress = (placeName) => {
   return parts.slice(0, 3).join(', ');
 };
 
-// Debounce helper
 const debounce = (func, delay) => {
   let timeout;
   return (...args) => {
@@ -49,7 +56,6 @@ const debounce = (func, delay) => {
   };
 };
 
-// Merge & deduplicate
 const mergeSuggestions = (arr1, arr2) => {
   const seen = new Set();
   const merged = [];
@@ -63,9 +69,10 @@ const mergeSuggestions = (arr1, arr2) => {
 };
 
 const Carpool = ({ route }) => {
-  const { userId,passengerId } = route.params || {};
-  console.log("PassengerID:", passengerId);
+  const { userId, passengerId } = route.params || {};
   const mapRef = useRef(null);
+  const navigation = useNavigation();
+
   const [pickup, setPickup] = useState(null);
   const [dropoff, setDropoff] = useState(null);
   const [pickupText, setPickupText] = useState('');
@@ -75,15 +82,14 @@ const Carpool = ({ route }) => {
   const [isPickupFocused, setIsPickupFocused] = useState(false);
   const [isDropoffFocused, setIsDropoffFocused] = useState(false);
   const [routeCoords, setRouteCoords] = useState([]);
-  const [price, setPrice] = useState(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [locationWatcher, setLocationWatcher] = useState(null);
-  const navigation = useNavigation();
+  const [distanceKm, setDistanceKm] = useState(null);
+  const [durationMin, setDurationMin] = useState(null);
 
   const translateToEnglish = async (text) => replaceUrduWords(text);
 
-  // Get nearest drivable road point
   const getNearestRoadPoint = async (coords) => {
     try {
       const matchRes = await axios.get(
@@ -94,23 +100,12 @@ const Carpool = ({ route }) => {
         const snapped = matchRes.data.matchings[0].geometry.coordinates[0];
         return { latitude: snapped[1], longitude: snapped[0] };
       }
-
-      const revRes = await axios.get(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${coords.longitude},${coords.latitude}.json`,
-        { params: { access_token: MAPBOX_TOKEN, types: 'address,street', limit: 1, language: 'en' } }
-      );
-      if (revRes.data.features?.length > 0) {
-        const snapped = revRes.data.features[0].center;
-        return { latitude: snapped[1], longitude: snapped[0] };
-      }
-
       return coords;
     } catch {
       return coords;
     }
   };
 
-  // Start watching live location
   const startWatchingLocation = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -138,6 +133,7 @@ const Carpool = ({ route }) => {
       Alert.alert('Error', 'Could not fetch your location.');
     }
   };
+
   const stopWatchingLocation = () => {
     if (locationWatcher) {
       locationWatcher.remove();
@@ -145,7 +141,6 @@ const Carpool = ({ route }) => {
     }
   };
 
-  // Mapbox suggestions (all categories)
   const getMapboxSuggestions = async (query) => {
     try {
       const res = await axios.get(
@@ -179,7 +174,6 @@ const Carpool = ({ route }) => {
     }
   };
 
-  // Nominatim suggestions
   const getNominatimSuggestions = async (query) => {
     try {
       const res = await axios.get(
@@ -203,7 +197,6 @@ const Carpool = ({ route }) => {
     }
   };
 
-  // Hybrid suggestions
   const fetchHybridSuggestions = useCallback(
     debounce(async (text, isPickup) => {
       if (!text || text.length < 2) return;
@@ -256,8 +249,8 @@ const Carpool = ({ route }) => {
       if (!res.data.routes.length) throw new Error("No route found");
       const coords = res.data.routes[0].geometry.coordinates.map(([lon, lat]) => ({ latitude: lat, longitude: lon }));
       setRouteCoords(coords);
-      const distKm = res.data.routes[0].distance / 1000;
-      setPrice(Math.round(BASE_FARE_PKR + distKm * PER_KM_RATE_PKR));
+      setDistanceKm((res.data.routes[0].distance / 1000).toFixed(2));
+      setDurationMin((res.data.routes[0].duration / 60).toFixed(1));
       mapRef.current.fitToCoordinates(coords, { edgePadding: { top: 100, bottom: 100, left: 50, right: 50 }, animated: true });
     } catch {
       Alert.alert('Error', 'Could not calculate route. Try selecting a nearby road.');
@@ -265,9 +258,11 @@ const Carpool = ({ route }) => {
       setRouteLoading(false);
     }
   };
-  useEffect(() => { if (pickup && dropoff) calculateRoute(); }, [pickup, dropoff]);
 
-  // Hide keyboard & suggestions
+  useEffect(() => {
+    if (pickup && dropoff) calculateRoute();
+  }, [pickup, dropoff]);
+
   const dismissKeyboardAndHideSuggestions = () => {
     Keyboard.dismiss();
     setIsPickupFocused(false);
@@ -305,6 +300,7 @@ const Carpool = ({ route }) => {
               </TouchableOpacity>
             )}
           </View>
+
           {isPickupFocused && (
             <FlatList
               style={styles.suggestionList}
@@ -346,6 +342,7 @@ const Carpool = ({ route }) => {
               </TouchableOpacity>
             )}
           </View>
+
           {isDropoffFocused && dropoffSuggestions.length > 0 && (
             <FlatList
               style={styles.suggestionList}
@@ -361,20 +358,28 @@ const Carpool = ({ route }) => {
           )}
         </View>
 
-        {price && (
+        {distanceKm && durationMin && (
           <View style={styles.bottomBox}>
-            <Text style={styles.price}>Estimated Fare: {price} PKR</Text>
-            <TouchableOpacity style={styles.bookBtn} onPress={() => {
-              Alert.alert(
-                'Booked',
-                `Fare: ${price} PKR`,
-                [{
-                  text: 'OK',
-                  onPress: () => navigation.navigate('CarpoolProfile', { userId,passengerId, pickupLocation: pickupText, dropoffLocation: dropoffText ,price})
-                }]
-              );
-            }}>
-              {routeLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.bookText}>Book Ride</Text>}
+            <Text style={styles.distance}>Distance: {distanceKm} km</Text>
+            <Text style={styles.distance}>Estimated Time: {durationMin} min</Text>
+            <TouchableOpacity
+              style={styles.bookBtn}
+              onPress={() =>
+                navigation.navigate('CarpoolProfile', {
+                  userId,
+                  passengerId,
+                  pickupLocation: pickupText,
+                  dropoffLocation: dropoffText,
+                  distanceKm: parseFloat(distanceKm),  // Ensure it's a number
+  durationMin: parseFloat(durationMin)
+                })
+              }
+            >
+              {routeLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.bookText}>Continue</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -400,7 +405,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', padding: 15, borderRadius: 10,
     alignItems: 'center', elevation: 4
   },
-  price: { fontSize: 18, marginBottom: 10 },
+  distance: { fontSize: 17, marginBottom: 5 },
   bookBtn: { backgroundColor: '#28a745', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center' },
   bookText: { color: '#fff', fontWeight: 'bold' }
 });

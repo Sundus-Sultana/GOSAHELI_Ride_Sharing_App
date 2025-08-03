@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.22:5000';
+export const API_URL = 'http://192.168.100.19:5000';
 
 
 
@@ -210,4 +210,13 @@ export const updateVehicleDetails = async (driverId, payload) => {
     body: JSON.stringify(payload),
   });
   return await response.json();
+};
+export const saveDriverCarpoolProfile = async (profileData) => {
+  try {
+    const response = axios.post(`${API_URL}/api/driver/carpool/offer`, profileData);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving Driver carpool profile:', error.response?.data || error.message);
+    throw error;
+  }
 };

@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import DriverMenuOverlay from "../components/DriverMenuOverlay"; // ✅ Correct import name
 import { auth } from "../firebase/setup";
-import { getRideHistory, getUser } from "../../api.js";
+import { getRideHistory, getUser,getDriverById } from "../../api.js";
 import SaheliLogo from "../../assets/IconWomen2.png";
 
 const DriverHome = ({ route }) => {
@@ -35,7 +35,7 @@ const DriverHome = ({ route }) => {
   const [showRating, setShowRating] = useState(false);
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
-
+const [driver, setDriver] = useState(null);
   const userId = paramuserId || dbUser?.UserID;
 
   const formatCurrency = (amount) => {
@@ -43,6 +43,24 @@ const DriverHome = ({ route }) => {
     return `PKR ${amount.toLocaleString("en-PK")}`;
   };
 
+useEffect(() => {
+  const fetchDriver = async () => {
+    if (!userId) return;
+    try {
+      console.log('user id to fetch driverid',userId);
+      const driverData = await getDriverById(userId);
+      if (driverData) {
+        setDriver(driverData);
+              console.log(' driverid',driver?.DriverID, );
+
+      }
+    } catch (err) {
+      console.error("Error fetching driver data:", err);
+    }
+  };
+
+  fetchDriver();
+}, [userId]);
 
   useFocusEffect(
   React.useCallback(() => {
@@ -214,7 +232,7 @@ const DriverHome = ({ route }) => {
     setActiveTab("OfferCarpool");
     navigation.navigate("OfferCarpool", {
       userId: userId,
-      driverId: paramDriverId || dbUser?.DriverID, // Pass driverId
+      driverId: driver?.DriverID,  // Pass driverId
     });
   }}
 >

@@ -14,7 +14,10 @@ const darkGrey = '#333';
 
 const CarpoolStatusScreen = ({ route }) => {
   const { userId, passengerId ,price} = route.params || {};
-console.log("Price:", price);  const [selectedTab, setSelectedTab] = useState('upcoming');
+console.log("Price:", price); 
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+   const [selectedTab, setSelectedTab] = useState('upcoming');
   const [rides, setRides] = useState({
     upcoming: [],
     completed: [],
@@ -40,12 +43,12 @@ console.log("Price:", price);  const [selectedTab, setSelectedTab] = useState('u
         text: 'Delete',
         onPress: async () => {
           try {
-            console.log('Deleting request with ID:', requestId); // ✅
-const response = await deleteCarpoolRequest(requestId); // ✅
+            setIsDeleting(true);              // ✅ Moved here
+            setDeletingId(requestId);         // ✅ Moved here
 
-            
+            const response = await deleteCarpoolRequest(requestId);
+
             if (response.success) {
-              // Update UI by refetching all rides
               await fetchRides();
               Alert.alert('Success', response.message || 'Carpool Request deleted successfully');
             } else {
@@ -54,11 +57,14 @@ const response = await deleteCarpoolRequest(requestId); // ✅
           } catch (error) {
             console.error('Delete error:', error);
             Alert.alert(
-              'Error', 
-              error.response?.data?.message || 
-              error.message || 
+              'Error',
+              error.response?.data?.message ||
+              error.message ||
               'Failed to delete ride'
             );
+          } finally {
+            setIsDeleting(false);             // ✅ Will now properly reset spinner
+            setDeletingId(null);
           }
         },
         style: 'destructive'
@@ -67,6 +73,7 @@ const response = await deleteCarpoolRequest(requestId); // ✅
     { cancelable: true }
   );
 };
+
 
   const fetchRides = async () => {
     try {
@@ -136,7 +143,7 @@ const response = await deleteCarpoolRequest(requestId); // ✅
     const pickupTime = moment(item.pickup_time, 'HH:mm:ss').format('hh:mm A');
     const dropoffTime = item.dropoff_time ? moment(item.dropoff_time, 'HH:mm:ss').format('hh:mm A') : null;
     // Inside renderCard function
-const displayFare = item.fare ? `Rs ${item.fare}` : 'Price not set';
+const displayFare = item.fare ? `Rs ${item.fare}` : 'fare not set';
     const lower = (str) => (str || '').toLowerCase();
 
    const showPreferences =
@@ -236,13 +243,23 @@ if (item.allows_luggage) {
 
         {/* Footer */}
         <View style={styles.cardFooter}>
-          <TouchableOpacity 
-          style={styles.iconButton}
-          onPress={() => handleDelete(item.RequestID)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#D64584" />
-        </TouchableOpacity>
-          <Text style={[styles.actionButtonText, { color: primaryColor }]}>Fare:  {displayFare}</Text>
+{item.status?.toLowerCase() !== 'completed' && item.status?.toLowerCase() !== 'cancelled' && (
+            <TouchableOpacity
+  onPress={() => {
+    handleDelete(item.RequestID);
+  }}
+  style={styles.iconButton}
+  disabled={isDeleting && deletingId === item.RequestID}
+>
+  {isDeleting && deletingId === item.RequestID ? (
+    <ActivityIndicator size="small" color={primaryColor} />
+  ) : (
+    <Ionicons name="trash-outline" size={20} color={primaryColor} />
+  )}
+</TouchableOpacity>
+)}
+         
+          <Text style={[styles.actionButtonText, { color: primaryColor }]}>Fare (per day):  {displayFare}</Text>
         </View>
       </View>
     );

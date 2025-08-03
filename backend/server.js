@@ -66,6 +66,9 @@ app.use('/api/get-passenger', getPassengerByUserId);
 const becomeDriverRoute = require('./routes/becomeDriver');
 app.use('/become-driver', becomeDriverRoute);
 
+const driverCarpoolRoutes = require('./routes/DriverCarpool');
+app.use('/api/driver/carpool', driverCarpoolRoutes);
+
 //  Vehicle img url to uploads
 app.use('/api/carpool', carpoolRoutes);
 app.use('/Vehicle_Images', express.static(path.join(__dirname, 'Vehicle_Images')));

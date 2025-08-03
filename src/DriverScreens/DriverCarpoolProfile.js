@@ -13,14 +13,16 @@ import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-import { saveCarpoolProfile } from '../../api';
+import { useNavigation } from '@react-navigation/native';
+import { saveCarpoolProfile ,saveDriverCarpoolProfile} from '../../api';
 
 const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
 const DriverCarpoolProfile = ({ route }) => {
   const { userId,driverId ,pickupLocation, dropoffLocation } = route.params || {};
-
+  console.log(" UserID AND DriverID",userId,driverId)
+ const navigation = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pickupTime, setPickupTime] = useState(new Date());
   const [dropOffTime, setDropOffTime] = useState(new Date());
@@ -110,21 +112,33 @@ const DriverCarpoolProfile = ({ route }) => {
     setIsSubmitting(true);
 
     try {
-      const profilePayload = {
-        user_id: userId,
-        pickup_location: pickup,
-        dropoff_location: dropoff,
-        seats: parseInt(seatsAvailable),
-        date: date.toISOString().split('T')[0],
-        pickup_time: formatTimeForDB(pickupTime),
-        dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
-        recurring_days: daysOfWeek.join(','),
-      };
+       const profilePayload = {
+    UserID: userId, // from AsyncStorage or context
+    DriverID: driverId, // from login or stored data
+    pickup_location: pickup,
+    dropoff_location: dropoff,
+    seats: parseInt(seatsAvailable),
+    date: date.toISOString().split('T')[0], // format date
+    pickup_time: formatTimeForDB(pickupTime), // HH:MM format
+    dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
+    recurring_days: daysOfWeek.join(','),
+  };
 
-      await saveCarpoolProfile(profilePayload);
-      Alert.alert("Success", "Profile saved successfully!");
+      await saveDriverCarpoolProfile(profilePayload);
+      Alert.alert("Success", "Carpool Offered Successfully!", [
+  {
+    text: "OK",
+    onPress: () => {
+      navigation.navigate("DriverCarpoolStatusScreen", {
+        driverId: driverId,
+        userId: userId,
+      });
+    },
+  },
+]);
+
     } catch (error) {
-      Alert.alert("Error", "Failed to save profile");
+      Alert.alert("Error", "Failed to save Offered profile");
     } finally {
       setIsSubmitting(false);
     }

@@ -11,6 +11,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
+import { ActivityIndicator } from 'react-native';
+import { CARPOOL_PRICE_PARAMS } from './Carpool';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { saveCarpoolProfile, API_URL, saveCarpoolRequest } from '../../api';
 import axios from 'axios';
@@ -21,12 +23,25 @@ const lightGrey = '#E0E0E0';
 const CarpoolProfile = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId, pickupLocation, dropoffLocation, profileId, passengerId, price } = route.params || {};
+  let {
+    userId,
+    passengerId,
+    profileId,
+    pickupLocation,
+    dropoffLocation,
+    distanceKm
+  } = route.params;
+
+  // Ensure distance is a number (fix NaN issues)
+  distanceKm = parseFloat(distanceKm) || 0;
+
   console.log("PassengerID on Carpool Profile:", passengerId);
-  console.log("Price on Carpool Profile:", price);
+  console.log("distance on Carpool Profile:", distanceKm);
 
   const [saveProfile, setSaveProfile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fareDetails, setFareDetails] = useState(null);
+  const [isCalculating, setIsCalculating] = useState(false);
   const [request, setRequest] = useState({
     pickup: '',
     dropoff: '',
@@ -74,7 +89,7 @@ const CarpoolProfile = () => {
             recurring: profile.is_recurring,
             daysOfWeek: profile.recurring_days?.split(',') || [],
             specialRequests: profile.special_requests || '',
-            fare:price
+            fare: price
           }));
 
           setRouteType(profile.route_type || 'One Way');
@@ -126,6 +141,127 @@ const CarpoolProfile = () => {
     }
   }, [pickupLocation, dropoffLocation, profileId, isInitialized, route.params?.formState]);
 
+
+  // Calculate fare whenever seats or time changes
+  useEffect(() => {
+    calculateFare();
+  }, [request.seatsNeeded, pickupTime, dropOffTime, routeType]);
+
+  const calculateFare = () => {
+    setIsCalculating(true);
+
+    const dist = Number(distanceKm);
+    if (isNaN(dist) || dist <= 0) {
+      Alert.alert('Error', 'Invalid distance');
+      setIsCalculating(false);
+      return;
+    }
+
+    const seats = parseInt(request?.seatsNeeded) || 1;
+    if (isNaN(seats) || seats <= 0) {
+      Alert.alert('Error', 'Invalid seat count');
+      setIsCalculating(false);
+      return;
+    }
+
+    const {
+      FUEL_PRICE_PER_LITER,
+      AVERAGE_MILEAGE,
+      DRIVER_PROFIT_MARGIN,
+      APP_COMMISSION,
+      PEAK_HOUR_SURCHARGE,
+      PEAK_HOURS,
+      BASE_COST_PER_KM,
+      MINIMUM_FARE
+    } = CARPOOL_PRICE_PARAMS;
+
+    const getFareForTime = (rideTime) => {
+      const hour = rideTime.getHours();
+      const isPeakHour = PEAK_HOURS.some(h => hour >= h && hour < h + 2);
+
+      // Fuel & Surcharge
+      let baseFuelCost = (dist / AVERAGE_MILEAGE) * FUEL_PRICE_PER_LITER;
+      const peakSurcharge = isPeakHour ? baseFuelCost * PEAK_HOUR_SURCHARGE : 0;
+      const totalFuelCost = baseFuelCost + peakSurcharge;
+
+      const sharedFuelPerSeat = totalFuelCost / 3;
+      const maintenancePerSeat = dist * BASE_COST_PER_KM;
+      const baseCostPerSeat = sharedFuelPerSeat + maintenancePerSeat;
+
+      const driverProfitPerSeat = baseCostPerSeat * DRIVER_PROFIT_MARGIN;
+      const appCommissionPerSeat = (baseCostPerSeat + driverProfitPerSeat) * APP_COMMISSION;
+
+      let finalFarePerSeat = baseCostPerSeat + driverProfitPerSeat + appCommissionPerSeat;
+      finalFarePerSeat = Math.max(finalFarePerSeat, MINIMUM_FARE);
+
+      const totalFare = finalFarePerSeat * seats;
+      const totalDriverEarnings = (baseCostPerSeat + driverProfitPerSeat) * seats;
+      const totalAppCommission = appCommissionPerSeat * seats;
+
+      return {
+        isPeakHour,
+        baseFuelCost,
+        peakSurcharge,
+        totalFuelCost,
+        sharedFuelPerSeat,
+        maintenancePerSeat,
+        baseCostPerSeat,
+        driverProfitPerSeat,
+        appCommissionPerSeat,
+        finalFarePerSeat,
+        totalFare,
+        totalDriverEarnings,
+        totalAppCommission
+      };
+    };
+
+    const pickupFare = getFareForTime(pickupTime);
+    const dropoffFare = routeType === 'Two Way' ? getFareForTime(dropOffTime) : null;
+
+    const totalFare = pickupFare.totalFare + (dropoffFare?.totalFare || 0);
+    const totalAppCommission = pickupFare.totalAppCommission + (dropoffFare?.totalAppCommission || 0);
+    const totalDriverEarnings = pickupFare.totalDriverEarnings + (dropoffFare?.totalDriverEarnings || 0);
+
+    // For display: set finalFare as combined per seat fare
+    const finalFarePerSeat =
+      pickupFare.finalFarePerSeat + (dropoffFare?.finalFarePerSeat || 0);
+
+    setFareDetails({
+      finalFare: Math.round(finalFarePerSeat),
+      returnFare: dropoffFare ? Math.round(dropoffFare.finalFarePerSeat) : null,
+      totalFare: Math.round(totalFare),
+      driverEarnings: Math.round(totalDriverEarnings),
+      appCommission: Math.round(totalAppCommission),
+      breakdown: {
+        seats,
+        pickup: {
+          isPeakHour: pickupFare.isPeakHour,
+          baseFuelCost: Math.round(pickupFare.baseFuelCost),
+          peakSurcharge: Math.round(pickupFare.peakSurcharge),
+          sharedFuelPerSeat: Math.round(pickupFare.sharedFuelPerSeat),
+          maintenancePerSeat: Math.round(pickupFare.maintenancePerSeat),
+          baseCostPerSeat: Math.round(pickupFare.baseCostPerSeat),
+          driverProfitPerSeat: Math.round(pickupFare.driverProfitPerSeat),
+          appCommissionPerSeat: Math.round(pickupFare.appCommissionPerSeat),
+          finalFarePerSeat: Math.round(pickupFare.finalFarePerSeat)
+        },
+        dropoff: dropoffFare && {
+          isPeakHour: dropoffFare.isPeakHour,
+          baseFuelCost: Math.round(dropoffFare.baseFuelCost),
+          peakSurcharge: Math.round(dropoffFare.peakSurcharge),
+          sharedFuelPerSeat: Math.round(dropoffFare.sharedFuelPerSeat),
+          maintenancePerSeat: Math.round(dropoffFare.maintenancePerSeat),
+          baseCostPerSeat: Math.round(dropoffFare.baseCostPerSeat),
+          driverProfitPerSeat: Math.round(dropoffFare.driverProfitPerSeat),
+          appCommissionPerSeat: Math.round(dropoffFare.appCommissionPerSeat),
+          finalFarePerSeat: Math.round(dropoffFare.finalFarePerSeat)
+        }
+      }
+    });
+
+    setIsCalculating(false);
+  };
+
   const handleTimeChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
       setShowAndroidPicker(false);
@@ -143,11 +279,11 @@ const CarpoolProfile = () => {
   const updateTime = (selectedDate) => {
     if (activeTimePickerFor === 'pickup') {
       setPickupTime(selectedDate);
+      setRequest(prev => ({ ...prev, time: selectedDate }));  // ✅ Sync
     } else if (activeTimePickerFor === 'dropoff') {
       setDropOffTime(selectedDate);
     }
   };
-
   const showPicker = (forWhat) => {
     if (forWhat === 'dropoff' && routeType !== 'Two Way') return;
     setActiveTimePickerFor(forWhat);
@@ -195,7 +331,10 @@ const CarpoolProfile = () => {
 
   const submitRequest = async () => {
     if (isSubmitting) return;
-
+    if (!fareDetails) {
+      Alert.alert('Error', 'Fare calculation in progress');
+      return;
+    }
     const { pickup, dropoff, seatsNeeded, date } = request;
     if (!pickup || !dropoff || !seatsNeeded || !date) {
       Alert.alert("Error", "Please complete all required fields.");
@@ -220,7 +359,8 @@ const CarpoolProfile = () => {
         is_recurring: request.recurring,
         recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
         special_requests: request.specialRequests || null,
-        route_type: routeType
+        route_type: routeType,
+        fare: fareDetails.totalFare
       };
 
       let carpool_profile_id = null;
@@ -229,7 +369,6 @@ const CarpoolProfile = () => {
         const profilePayload = {
           UserID: userId,
           ...ridePayload,
-          fare: price 
         };
 
         const response = await saveCarpoolProfile(profilePayload);
@@ -245,7 +384,6 @@ const CarpoolProfile = () => {
         PassengerID: passengerId,
         carpool_profile_id: carpool_profile_id || null,
         ...ridePayload,
-        fare: price 
       };
 
       const response = await saveCarpoolRequest(statusPayload);
@@ -255,7 +393,7 @@ const CarpoolProfile = () => {
       console.log("Ride Request ID:", RequestID);
 
       // Navigate to status screen
-      navigation.navigate('CarpoolStatusScreen', { userId, passengerId, price });
+      navigation.navigate('CarpoolStatusScreen', { userId, passengerId, fareDetails });
     } catch (error) {
       console.error('Error saving profile or creating request:', error);
       Alert.alert(
@@ -391,6 +529,9 @@ const CarpoolProfile = () => {
                 <Text style={styles.timeTextInactive}>  </Text>
               )}
             </View>
+            <Text style={styles.distanceText}>
+              Distance: {isNaN(distanceKm) ? 'N/A' : distanceKm.toFixed(1)} km
+            </Text>
           </View>
 
           {/* Time Pickers */}
@@ -481,6 +622,29 @@ const CarpoolProfile = () => {
               negativeButton={{ label: 'Cancel', textColor: '#D64584' }}
             />
           )}
+
+          {/* Fare Breakdown */}
+          {fareDetails && fareDetails.breakdown && (
+            <View style={styles.fareCard}>
+              <Text style={styles.fareHeader}>Fare Summary</Text>
+
+              <View style={styles.fareRow}>
+                <Text>Distance:</Text>
+                <Text>{distanceKm?.toFixed(1)} km</Text>
+              </View>
+
+              <View style={styles.fareRow}>
+                <Text>Final Fare (Per Person/day):</Text>
+                <Text>{fareDetails.finalFare} PKR</Text>
+              </View>
+
+              <View style={[styles.fareRow, { marginTop: 6 }]}>
+                <Text>Total Fare for {fareDetails.breakdown.seats} Seat(s):</Text>
+                <Text>{fareDetails.totalFare} PKR</Text>
+              </View>
+            </View>
+          )}
+
 
           {/* Recurring */}
           <View style={styles.switchContainer}>
@@ -617,14 +781,17 @@ const CarpoolProfile = () => {
 
         </ScrollView>
 
+        {/* Submit Button */}
         <TouchableOpacity
           style={styles.submitButton}
           onPress={submitRequest}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCalculating}
         >
-          <Text style={styles.submitButtonText}>
-            {isSubmitting ? 'Submitting...' : (profileId ? 'Update Profile' : 'Find Carpool')}
-          </Text>
+          {isSubmitting || isCalculating ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.submitButtonText}>Confirm Booking</Text>
+          )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -862,19 +1029,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2c3e50'
   },
+  fareCard: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 15,
+    marginBottom: 15,
+
+    elevation: 2
+  },
+  fareHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10
+  },
+  fareRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 4
+  },
+  totalFareText: {
+    fontWeight: 'bold',
+    fontSize: 16
+  },
   submitButton: {
-    backgroundColor: '#D64584',
+    backgroundColor: primaryColor,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 10,
-    marginHorizontal: 20,
+    marginTop: 16
   },
   submitButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    fontSize: 16
   }
 });
 

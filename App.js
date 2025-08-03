@@ -33,6 +33,7 @@ import DriverHome from './src/DriverScreens/DriverHome';
 import DriverMenuOverlay from './src/components/DriverMenuOverlay';
 import DriverCarpoolMap from './src/DriverScreens/DriverCarpoolMap';
 import DriverCarpoolProfile from './src/DriverScreens/DriverCarpoolProfile';
+import DriverCarpoolStatusScreen from './src/DriverScreens/DriverCarpoolStatusScreen';
 import OfferCarpool from './src/DriverScreens/OfferCarpool';
 import VehicleSetupScreen from './src/DriverScreens/VehicleSetupScreen';
 import UploadVehiclePictureScreen from './src/DriverScreens/UploadVehiclePictureScreen';
@@ -73,6 +74,7 @@ export default function App() {
           <Stack.Screen name="DriverMenuOverlay" component={DriverMenuOverlay} />
           <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap} options={{ headerShown: false }} />
           <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile} />
+           <Stack.Screen name="DriverCarpoolStatusScreen" component={DriverCarpoolStatusScreen} options={{ headerShown: false }}/>
           <Stack.Screen
             name="OfferCarpool"
             component={OfferCarpool}
