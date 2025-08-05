@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView,
+  View, Text, BackHandler,TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView,
   LayoutAnimation, UIManager, Platform
 } from 'react-native';
 import { Ionicons ,MaterialIcons} from '@expo/vector-icons';
@@ -12,13 +12,19 @@ import { API_URL } from '../../api';
 import { registerForPushNotificationsAsync } from '../utils/NotificationSetup';
 // Add to imports in DriverCarpoolStatusScreen.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native'; 
+import { collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase/setup';
+import { getUserById, getPassengerUserIdFromRequest } from '../utils/ApiCalls';
+import { useFocusEffect } from '@react-navigation/native';
+
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
 const BlackColor='#000000'
 
 const DriverCarpoolStatusScreen = ({ route }) => {
-  const { driverId ,userId} = route.params;
+  const { tab,driverId ,userId} = route.params;
   console.log('DriverID:', driverId, 'UserID:', userId);
 console.log('API_URL:', API_URL);
   const [activeTab, setActiveTab] = useState('Requests');
@@ -27,6 +33,7 @@ console.log('API_URL:', API_URL);
   const [allPendingRequests, setAllPendingRequests] = useState([]);
   const [showMatchedOnly, setShowMatchedOnly] = useState(false);
   const [acceptedRequests, setAcceptedRequests] = useState([]);
+  const navigation = useNavigation();
 
 
 if (Platform.OS === 'android') {
@@ -34,6 +41,103 @@ if (Platform.OS === 'android') {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 }
+
+
+  useFocusEffect(
+  React.useCallback(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+     navigation.navigate('DriverHome', {
+  driverId,
+  userId
+});
+
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, [])
+);
+useEffect(() => {
+  if (route.params?.tab === 'Accepted') {
+    setActiveTab('Accepted');
+  }
+}, [route.params]);
+
+  const fetchPassengerUserId = async (requestId) => {
+    try {
+      console.log(`${API_URL}/api/become-passenger/user-by-request/${requestId}`);
+const res = await axios.get(`${API_URL}/api/become-passenger/user-by-request/${requestId}`);
+      return res.data.userId;
+    } catch (e) {
+      console.error('Error fetching passenger userId:', e);
+      return null;
+    }
+  };
+
+  const fetchUserDetails = async (uid) => {
+    try {
+     const res = await axios.get(`${API_URL}/api/become-passenger/user-by-id/${uid}`);
+
+      return res.data;
+    } catch (e) {
+      console.error('Error fetching user details:', e);
+      return null;
+    }
+  };
+
+  const handleChatPress = async (requestId) => {
+  try {
+    setLoading(true);
+
+    // Use getPassengerUserIdFromRequest instead of fetchPassengerUserId
+    const passengerData = await getPassengerUserIdFromRequest(requestId);
+
+    if (!passengerData || !passengerData.userId || !passengerData.username) {
+      ToastAndroid.show('Passenger not found for this request', ToastAndroid.SHORT);
+      return;
+    }
+
+    const driverDetails = await getUserById(userId);
+    if (!driverDetails) {
+      ToastAndroid.show('Could not load your driver info', ToastAndroid.SHORT);
+      return;
+    }
+
+    navigation.navigate('ChatUI', {
+      driverId ,userId,
+      chatRoomId: `chat_request_${requestId}`,
+      currentUser: 'driver',
+      currentUserId: userId,
+      currentUserName: driverDetails.username,
+      currentUserPhoto: driverDetails.photo_url,
+      receiverUserId: passengerData.userId,
+      receiverUserName: passengerData.username,
+       receiverUserPhoto: passengerData.photo_url 
+    });
+
+  } catch (err) {
+    console.error('Error getting passenger userId:', err);
+    if (err.response?.status === 404) {
+      ToastAndroid.show('Chat not available until passenger accepts your offer', ToastAndroid.SHORT);
+    } else {
+      ToastAndroid.show('Something went wrong opening chat', ToastAndroid.SHORT);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+ const deleteChatForRequest = async (requestId) => {
+    const chatRoomId = `chat_request_${requestId}`;
+    const q = collection(db, chatRoomId);
+    const snapshot = await getDocs(q);
+    snapshot.forEach((doc) => {
+      deleteDoc(doc.ref);
+    });
+  };
+
 
 const handleAccept = async (requestId) => {
   Alert.alert(
@@ -104,7 +208,6 @@ const handleReject = (requestId) => {
 };
 
 
-// In DriverCarpoolStatusScreen.js, modify the useEffect:
 // In DriverCarpoolStatusScreen.js, update the useEffect:
 useEffect(() => {
   const registerNotifications = async () => {
@@ -341,6 +444,19 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
           Fare (per day): {item.fare || 'N/A'}
         </Text>
       </View>
+
+
+      {/* Chat button for accepted requests */}
+     {item.status === 'accepted' && (
+  <TouchableOpacity
+    style={{ marginTop: 10, alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center' }}
+    onPress={() => handleChatPress(item.RequestID)}
+  >
+    <Ionicons name="chatbubble-ellipses-outline" size={20} color={primaryColor} />
+    <Text style={{ color: primaryColor, marginLeft: 6 }}>Chat</Text>
+  </TouchableOpacity>
+)}
+   
       {/* Accept / Reject Buttons */}
 <View style={styles.actionsRow}>
   <TouchableOpacity

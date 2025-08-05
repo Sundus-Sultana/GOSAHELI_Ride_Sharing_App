@@ -160,8 +160,5 @@ router.get('/accepted-requests/:driverId', async (req, res) => {
   }
 });
 
-
-
-
 // Export at the end
 module.exports = router;

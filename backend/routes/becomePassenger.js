@@ -46,4 +46,84 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+
+    // ✅ for chat
+
+router.get('/user-by-request/:requestId', async (req, res) => {
+  const { requestId } = req.params;
+    console.log('🔍 user-by-request route HIT with ID:', req.params.requestId);
+
+  try {
+    // First get PassengerID from Carpool_Request_Status
+    const passengerIdResult = await client.query(
+      `SELECT "PassengerID" FROM "Carpool_Request_Status" 
+       WHERE "RequestID" = $1`,
+      [requestId]
+    );
+
+    if (passengerIdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found or no passenger assigned' });
+    }
+
+    const passengerId = passengerIdResult.rows[0].PassengerID;
+
+    // Then get UserID from Passenger table
+    const userIdResult = await client.query(
+      `SELECT "UserID" FROM "Passenger" 
+       WHERE "PassengerID" = $1`,
+      [passengerId]
+    );
+
+    if (userIdResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+
+    const userId = userIdResult.rows[0].UserID;
+
+    // Finally get username from User table
+    const userResult = await client.query(
+      `SELECT "username" FROM "User" 
+       WHERE "UserID" = $1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ 
+      userId: userId,
+      username: userResult.rows[0].username 
+    });
+
+  } catch (error) {
+    console.error('Error fetching passenger userId:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// Add this to your backend routes
+router.get('/user-by-id/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const result = await client.query(
+      'SELECT "UserID", "username","photo_url" FROM "User" WHERE "UserID" = $1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 module.exports = router;
