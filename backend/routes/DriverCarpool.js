@@ -45,6 +45,7 @@ router.post('/offer', async (req, res) => {
 
 
 // GET /matched-requests-all/:driverId
+// GET /matched-requests-all/:driverId
 router.get('/matched-requests-all/:driverId', async (req, res) => {
   const { driverId } = req.params;
 
@@ -54,7 +55,9 @@ router.get('/matched-requests-all/:driverId', async (req, res) => {
       [driverId]
     );
 
-    if (!offers.rows.length) return res.json({ matched: [] });
+    if (!offers.rows.length) {
+      return res.json({ matched: [] });
+    }
 
     const conditions = offers.rows.map((o, idx) => `
       (
@@ -70,7 +73,8 @@ router.get('/matched-requests-all/:driverId', async (req, res) => {
     `).join(' OR ');
 
     const queryText = `
-      SELECT * FROM "Carpool_Request_Status"
+      SELECT *
+      FROM "Carpool_Request_Status"
       WHERE status = 'pending'
         AND (${conditions})
     `;
@@ -92,13 +96,23 @@ router.get('/matched-requests-all/:driverId', async (req, res) => {
 });
 
 
-// Get all pending requests
+// GET /all-pending-requests
 router.get('/all-pending-requests', async (_req, res) => {
-  const result = await client.query(
-    `SELECT * FROM "Carpool_Request_Status" WHERE status = 'pending' ORDER BY "RequestID" DESC`
-  );
-  res.json({ allPending: result.rows });
+  try {
+    const result = await client.query(`
+      SELECT *
+      FROM "Carpool_Request_Status"
+      WHERE status = 'pending'
+      ORDER BY "RequestID" DESC
+    `);
+
+    res.json({ allPending: result.rows });
+  } catch (err) {
+    console.error('All-pending-requests ERROR:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch pending requests' });
+  }
 });
+
 
 
 

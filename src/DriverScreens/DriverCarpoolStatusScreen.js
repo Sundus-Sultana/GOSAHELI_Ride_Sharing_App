@@ -3,14 +3,16 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView,
   LayoutAnimation, UIManager, Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons ,MaterialIcons} from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
+import { Alert, ToastAndroid } from 'react-native'; // Already imported mostly
 import axios from 'axios';
 import { API_URL } from '../../api';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
+const BlackColor='#000000'
 
 const DriverCarpoolStatusScreen = ({ route }) => {
   const { driverId } = route.params;
@@ -23,6 +25,36 @@ const DriverCarpoolStatusScreen = ({ route }) => {
   if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
+
+const handleAccept = (requestId) => {
+  // Call your accept API or function here
+  console.log('Accepted:', requestId);
+  ToastAndroid.show('Request Accepted', ToastAndroid.SHORT);
+};
+
+const handleReject = (requestId) => {
+  Alert.alert(
+    "Confirm Rejection",
+    "Are you sure you want to reject this request?",
+    [
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+      {
+        text: "Reject",
+        style: "destructive",
+        onPress: () => {
+          // Call your reject API or function here
+          console.log('Rejected:', requestId);
+          ToastAndroid.show('Request Rejected', ToastAndroid.SHORT);
+        }
+      }
+    ],
+    { cancelable: true }
+  );
+};
+
 
   useEffect(() => {
     if (activeTab === 'Requests') fetchRequests();
@@ -63,7 +95,7 @@ const DriverCarpoolStatusScreen = ({ route }) => {
   };
 
   const formatTime = (timeStr) => {
-    if (!timeStr) return 'N/A';
+    if (!timeStr) return null;
     const [hours, minutes] = timeStr.split(':');
     const date = new Date();
     date.setHours(hours, minutes);
@@ -75,99 +107,203 @@ const DriverCarpoolStatusScreen = ({ route }) => {
   };
 
 
-  const renderRequestCard = (item, key) => {
-    const formattedDate = formatDate(item.date);
-    const pickupTime = formatTime(item.pickup_time);
-    const dropoffTime = formatTime(item.dropoff_time) ;
-    const isTwoWay = item.is_two_way || false;
-    const preferences = item.preferences || [];
+const renderRequestCard = (item, key, isMatched = false) => {
+  const formattedDate = formatDate(item.date);
+  const pickupTime = formatTime(item.pickup_time);
+  const dropoffTime = formatTime(item.dropoff_time);
+const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two way"
 
-    const renderStatusBadge = (status) => {
-      let backgroundColor = '#999';
-      if (status === 'matched') backgroundColor = '#4CAF50';
-      else if (status === 'pending') backgroundColor = '#FFC107';
-      else if (status === 'rejected') backgroundColor = '#F44336';
+  const specialReq = item.special_requests;
+  const luggage = item.allows_luggage;
+  const preferences = [
+    { label: 'Smoking', value: item.smoking_preference },
+    { label: 'Music', value: item.music_preference },
+    { label: 'Conversation', value: item.conversation_preference },
+  ].filter(pref => pref.value && pref.value !== 'no-preference');
 
-      return (
-        <View style={[styles.badge, { backgroundColor }]}>
-          <Text style={styles.badgeText}>{status?.toUpperCase()}</Text>
-        </View>
-      );
-    };
+  const renderStatusBadge = (status) => {
+    let backgroundColor = '#999';
+    let label = status?.toUpperCase();
 
-    const renderRecurringDays = (days) => {
-      if (!days) return null;
-      const dayList = days.split(',').map(day => day.trim());
-      return (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-          {dayList.map((day, index) => (
-            <View key={index} style={styles.dayCircle}>
-              <Text style={styles.dayText}>{day}</Text>
-            </View>
-          ))}
-        </View>
-      );
-    };
+    if (status === 'matched') {
+      backgroundColor = '#4CAF50';
+      label = 'MATCHED';
+    } else if (status === 'pending') {
+      backgroundColor = isMatched ? '#17A2B8' : '#FFC107';
+      label = isMatched ? 'REQUESTED' : 'PENDING';
+    } else if (status === 'rejected') {
+      backgroundColor = '#F44336';
+      label = 'REJECTED';
+    }
 
     return (
-      <View style={styles.card} key={key}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardDate}>DATE START: {formattedDate}</Text>
-          {renderStatusBadge(item.status)}
-        </View>
-
-        {/* Pickup Row */}
-        <View style={styles.routeRow}>
-          <View style={styles.routeDot} />
-          <Text style={styles.locationText}>
-            <Text style={styles.locationLabel}>Pickup: </Text>{item.pickup_location}
-          </Text>
-          <Text style={styles.timeText}>{pickupTime}</Text>
-        </View>
-
-        <View style={{ alignItems: 'flex-start', marginVertical: 4 }}>
-          <Ionicons name={isTwoWay ? 'swap-vertical' : 'arrow-down'} size={20} color='#555' />
-        </View>
-
-        <View style={styles.routeRow}>
-          <View style={[styles.routeDot, { backgroundColor: primaryColor }]} />
-          <Text style={styles.locationText}>
-            <Text style={styles.locationLabel}>Dropoff: </Text>{item.dropoff_location}
-          </Text>
-          {dropoffTime && <Text style={styles.timeText}>{dropoffTime}</Text>}
-        </View>
-
-        {renderRecurringDays(item.recurring_days)}
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-          <Text style={{ fontWeight: '400', color: '#555' }}>
-            Passengers:{" "}
-            <Text style={{ fontWeight: '600', color: darkGrey, fontSize: 18 }}>
-              {item.seats}
-              <Ionicons name="woman" size={20} color={primaryColor} style={{ marginLeft: 4 }} />
-            </Text>
-          </Text>
-        </View>
-
-        {preferences.length > 0 && (
-          <View style={{ marginTop: 8 }}>
-            {preferences.map((pref, index) => (
-              <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                {pref.icon}
-                <Text style={{ fontSize: 13, color: '#555', marginLeft: 6 }}>{pref.label}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.cardFooter}>
-          <Text style={[styles.actionButtonText, { color: primaryColor }]}>
-            Fare (per day): {item.fare || 'N/A'}
-          </Text>
-        </View>
+      <View style={[styles.badge, { backgroundColor }]}>
+        <Text style={[
+          styles.badgeText,
+          label === 'REQUESTED' && {
+            textShadowColor: '#00BFFF',
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: 6,
+          }
+        ]}>
+          {label}
+        </Text>
       </View>
     );
   };
+
+  const dayAbbreviations = {
+    Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
+    Friday: 'Fri', Saturday: 'Sat', Sunday: 'Sun'
+  };
+
+  const renderRecurringDays = (days) => {
+    if (!days) return null;
+    return (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+        {days.split(',').map((day, idx) => (
+          <View key={idx} style={styles.dayCircle}>
+            <Text style={styles.dayText}>{dayAbbreviations[day.trim()] || day}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.card} key={key}>
+      {/* Header */}
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardDate}>DATE START: {formattedDate}</Text>
+        {renderStatusBadge(item.status)}
+      </View>
+
+      {/* Pickup */}
+      <View style={styles.routeRow}>
+        <View style={styles.routeDot} />
+        <Text style={styles.locationText}>
+          <Text style={styles.locationLabel}>Pickup: </Text>{item.pickup_location}
+        </Text>
+        <Text style={styles.timeText}>{pickupTime}</Text>
+      </View>
+
+      {/* Route Type */}
+      <View style={{ alignItems: 'flex-start', marginVertical: 4 }}>
+        <Ionicons
+  name={routeType === 'two way' ? 'swap-vertical' : 'arrow-down'}
+  size={20}
+  color={BlackColor}
+/>
+
+
+      </View>
+
+      {/* Dropoff */}
+      <View style={styles.routeRow}>
+        <View style={[styles.routeDot, { backgroundColor: primaryColor }]} />
+        <Text style={styles.locationText}>
+          <Text style={styles.locationLabel}>Dropoff: </Text>{item.dropoff_location}
+        </Text>
+        {dropoffTime && <Text style={styles.timeText}>{dropoffTime}</Text>}
+      </View>
+
+      {/* Recurring Days */}
+      {renderRecurringDays(item.recurring_days)}
+
+      {/* Passenger Info */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+        <Text style={{ fontWeight: '400', color: '#555' }}>
+          Passengers:{" "}
+          <Text style={{ fontWeight: '600', color: darkGrey, fontSize: 18 }}>
+            {item.seats}
+            <Ionicons name="woman" size={20} color={primaryColor} style={{ marginLeft: 4 }} />
+          </Text>
+        </Text>
+      </View>
+
+      {/* Preferences */}
+    {preferences.length > 0 && (
+  <View style={styles.preferenceContainer}>
+    {preferences.map((pref, index) => {
+      let IconComponent = Ionicons;
+      let iconName = 'options-outline';
+
+      if (pref.label === 'Smoking') {
+        IconComponent = MaterialIcons;
+        iconName = 'smoking-rooms';
+      } else if (pref.label === 'Music') {
+        iconName = 'musical-notes-outline';
+      } else if (pref.label === 'Conversation') {
+        iconName = 'chatbubble-ellipses-outline';
+      }
+
+      return (
+        <View key={index} style={styles.preferenceRow}>
+          <IconComponent
+            name={iconName}
+            size={18}
+            color={primaryColor}
+            style={styles.preferenceIcon}
+          />
+          <Text style={styles.preferenceLabel}>{pref.label}:</Text>
+          <Text style={styles.preferenceValue}>{pref.value}</Text>
+        </View>
+      );
+    })}
+  </View>
+)}
+
+
+
+      {/* Luggage */}
+      {luggage && (
+        <View style={{ marginTop: 6 }}>
+          <Text style={{ color: '#555' }}>
+            <Text style={{ fontWeight: '600' }}>Allow Luggage:</Text> Yes
+          </Text>
+        </View>
+      )}
+
+      {/* Special Requirements */}
+      {specialReq && (
+        <View style={{ marginTop: 4 }}>
+          <Text style={{ color: '#555' }}>
+            <Text style={{ fontWeight: '600' }}>Special Requirements:</Text> {specialReq}
+          </Text>
+        </View>
+      )}
+
+      {/* Fare */}
+      <View style={styles.cardFooter}>
+        <Text style={[styles.actionButtonText, { color: primaryColor }]}>
+          Fare (per day): {item.fare || 'N/A'}
+        </Text>
+      </View>
+      {/* Accept / Reject Buttons */}
+<View style={styles.actionsRow}>
+  <TouchableOpacity
+    style={styles.actionButton}
+    activeOpacity={0.8}
+    onPress={() => handleAccept(item.RequestID)}
+  >
+    <Text style={styles.acceptButtonText}>Accept</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={[styles.actionButton, styles.rejectButton]}
+    activeOpacity={0.8}
+    onPress={() => handleReject(item.RequestID)}
+  >
+    <Text style={styles.rejectButtonText}>Reject</Text>
+  </TouchableOpacity>
+</View>
+
+</View>
+
+  );
+};
+
+
 
   const renderRequests = () => {
     if (loading) {
@@ -192,7 +328,7 @@ const DriverCarpoolStatusScreen = ({ route }) => {
           {matchedRequests.length === 0 ? (
             <Text style={styles.emptyText}>No matching requests found.</Text>
           ) : (
-            matchedRequests.map((req) => renderRequestCard(req, req.RequestID))
+            matchedRequests.map((req) => renderRequestCard(req, req.RequestID, true))
           )}
         </View>
 
@@ -208,8 +344,7 @@ const DriverCarpoolStatusScreen = ({ route }) => {
             {filteredPending.length === 0 ? (
               <Text style={styles.emptyText}>No pending requests.</Text>
             ) : (
-              filteredPending.map((req) => renderRequestCard(req, req.RequestID))
-            )}
+              filteredPending.map((req) => renderRequestCard(req, req.RequestID, false)))}
           </View>
         )}
       </ScrollView>
@@ -481,9 +616,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: primaryColor,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 20,
+    borderRadius: 20, paddingVertical: 6, paddingHorizontal: 6,
     marginRight: 6,
     marginTop: 4,
 
@@ -496,9 +629,78 @@ const styles = StyleSheet.create({
   },
 
   dayText: {
-    color: primaryColor,
-    fontSize: 12,
-    fontWeight: '600'
+    color: primaryColor, fontSize: 10
   },
+  preferenceContainer: {
+  marginTop: 10,
+  paddingVertical: 6,
+  paddingHorizontal: 8,
+  backgroundColor: '#ffffffff',
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: '#EEE',
+},
+
+preferenceRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginVertical: 4,
+},
+
+preferenceIcon: {
+  marginRight: 6,
+},
+
+preferenceLabel: {
+  fontSize: 13,
+  fontWeight: '600',
+  color: '#444',
+  marginRight: 4,
+},
+
+preferenceValue: {
+  fontSize: 13,
+  fontWeight: '500',
+  color: '#666',
+  flexShrink: 1,
+},
+actionsRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 16,
+},
+
+actionButton: {
+  flex: 1,
+  paddingVertical: 10,
+  marginHorizontal: 6,
+  borderRadius: 22,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: primaryColor,
+  backgroundColor: '#fff',
+  elevation: 2,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 2,
+},
+
+acceptButtonText: {
+  color: primaryColor,
+  fontWeight: '600',
+},
+
+rejectButton: {
+  borderColor: '#aaa',
+  backgroundColor: '#f9f9f9',
+},
+
+rejectButtonText: {
+  color: '#555',
+  fontWeight: '600',
+},
+
+
 
 });

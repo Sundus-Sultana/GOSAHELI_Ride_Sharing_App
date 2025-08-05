@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { auth } from '../firebase/setup';
 import * as ImagePicker from 'expo-image-picker';
- import { uploadProfilePhoto, getUserPhoto, getRideHistory, getUserById, API_URL } from '../../api.js';
+ import { uploadProfilePhoto, getUserPhoto, getRideHistory, getUserById,getDriverById, API_URL } from '../../api.js';
 
 const DriverMenuOverlay = ({ visible, closeModal, navigation, userId, user }) => {
   const [photoURL, setPhotoURL] = useState(null);
@@ -196,11 +196,29 @@ const userRes = await getUserById(userId);
                     <Text style={styles.menuText}>Wallet</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.menuItem} onPress={() => {
-                    closeModal(); navigation.navigate('Carpool');
-                  }}>
-                    <Text style={styles.menuText}>Carpool</Text>
-                  </TouchableOpacity>
+               <TouchableOpacity
+  style={styles.menuItem}
+  onPress={async () => {
+    closeModal();
+    try {
+      const driverRes = await getDriverById(userId);
+      if (driverRes && driverRes.DriverID) {
+        navigation.navigate('DriverCarpoolStatusScreen', {
+          userId,
+          driverId: driverRes.DriverID,
+        });
+      } else {
+        Alert.alert('Error', 'Driver ID not found.');
+      }
+    } catch (error) {
+      console.error('Error navigating to carpool status:', error);
+      Alert.alert('Error', 'Failed to load carpool status.');
+    }
+  }}
+>
+  <Text style={styles.menuText}>My Carpools</Text>
+</TouchableOpacity>
+
 
                   <TouchableOpacity style={styles.menuItem} onPress={handleMyRidesPress}>
                     <Text style={styles.menuText}>My Rides</Text>

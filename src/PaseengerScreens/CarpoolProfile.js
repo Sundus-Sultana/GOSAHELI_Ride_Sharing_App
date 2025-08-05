@@ -707,8 +707,8 @@ const CarpoolProfile = () => {
                   dropdownIconColor="#D64584"
                 >
                   <Picker.Item label="No preference" value="no-preference" />
-                  <Picker.Item label="No smoking" value="No Smoking" />
-                  <Picker.Item label="Smoking allowed" value="can smoke" />
+                  <Picker.Item label="Smoking Not Allowed" value="Smoking Not Allowed" />
+                  <Picker.Item label="Smoking Allowed" value="Smoking Allowed" />
                 </Picker>
               </View>
 
@@ -737,8 +737,8 @@ const CarpoolProfile = () => {
                   dropdownIconColor="#D64584"
                 >
                   <Picker.Item label="No preference" value="no-preference" />
-                  <Picker.Item label="Quiet ride" value="Quiet Ride" />
-                  <Picker.Item label="Chatting OK" value="chatting OK" />
+                  <Picker.Item label="Quiet Ride" value="Quiet Ride" />
+                  <Picker.Item label="Friendly Chat" value="Friendly Chat" />
                 </Picker>
               </View>
 
