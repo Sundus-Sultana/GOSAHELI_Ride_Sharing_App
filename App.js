@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import Toast from 'react-native-toast-message'; // ✅ In-app toast
+
+// ✅ Notification Setup
+import { registerForPushNotificationsAsync } from './src//utils/NotificationSetup';
 
 /* Components */
 import CustomBackButton from './src/components/CustomBackButton';
@@ -43,6 +46,23 @@ import LicensePictureScreen from './src/DriverScreens/LicensePictureScreen';
 const Stack = createStackNavigator();
 
 export default function App() {
+   // ✅ Register for push notifications
+ // App.js
+useEffect(() => {
+  const initializeApp = async () => {
+    // Wait for splash screen to complete
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Or your splash duration
+    
+    // Then check for user and register notifications
+    const userId = await AsyncStorage.getItem('UserID');
+    if (userId) {
+      await registerForPushNotificationsAsync(userId);
+    }
+  };
+
+  initializeApp();
+}, []);
+
   return (
     <>
       <NavigationContainer>
@@ -55,9 +75,9 @@ export default function App() {
           <Stack.Screen name="Login" component={Login} options={{ headerShown: false }} />
           <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
           <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
-          <Stack.Screen name="Carpool" component={Carpool} options={{ headerShown: false }}  />
+          <Stack.Screen name="Carpool" component={Carpool} options={{ headerShown: false }} />
           <Stack.Screen name="CarpoolProfile" component={CarpoolProfile} options={{ headerShown: false }} />
-             <Stack.Screen name="CarpoolProfileList" component={CarpoolProfileList} options={{ headerShown: false }} />
+          <Stack.Screen name="CarpoolProfileList" component={CarpoolProfileList} options={{ headerShown: false }} />
           <Stack.Screen name="CarpoolStatusScreen" component={CarpoolStatusScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChatUI" component={ChatUI} options={{ headerShown: false }} />
           <Stack.Screen name="History" component={History} />
@@ -74,7 +94,7 @@ export default function App() {
           <Stack.Screen name="DriverMenuOverlay" component={DriverMenuOverlay} />
           <Stack.Screen name="DriverCarpoolMap" component={DriverCarpoolMap} options={{ headerShown: false }} />
           <Stack.Screen name="DriverCarpoolProfile" component={DriverCarpoolProfile} />
-           <Stack.Screen name="DriverCarpoolStatusScreen" component={DriverCarpoolStatusScreen} options={{ headerShown: false }}/>
+          <Stack.Screen name="DriverCarpoolStatusScreen" component={DriverCarpoolStatusScreen} options={{ headerShown: false }} />
           <Stack.Screen
             name="OfferCarpool"
             component={OfferCarpool}
@@ -120,11 +140,11 @@ export default function App() {
       </NavigationContainer>
 
       {/* ✅ Toast UI */}
-     <Toast
-  position="bottom"
-  bottomOffset={60}
-  visibilityTime={3000}
-/>
+      <Toast
+        position="bottom"
+        bottomOffset={60}
+        visibilityTime={3000}
+      />
     </>
   );
 }

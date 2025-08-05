@@ -21,12 +21,16 @@ import { useNavigation } from "@react-navigation/native";
 import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import DriverMenuOverlay from "../components/DriverMenuOverlay"; // ✅ Correct import name
 import { auth } from "../firebase/setup";
-import { getRideHistory, getUser,getDriverById } from "../../api.js";
+import { getRideHistory, getUser, getDriverById } from "../../api.js";
 import SaheliLogo from "../../assets/IconWomen2.png";
+import { registerForPushNotificationsAsync } from '../utils/NotificationSetup'; // Adjust path if needed
+// Add at the top with other imports
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const DriverHome = ({ route }) => {
   const navigation = useNavigation();
-  const { userId: paramuserId, userName: paramUserName, user: paramuser,driverId: paramDriverId, } = route.params || {};
+  const { userId: paramuserId, userName: paramUserName, user: paramuser, driverId: paramDriverId, } = route.params || {};
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [dbUser, setDbUser] = useState(paramuser || null);
@@ -35,7 +39,7 @@ const DriverHome = ({ route }) => {
   const [showRating, setShowRating] = useState(false);
   const [rating, setRating] = useState(0);
   const [hasRated, setHasRated] = useState(false);
-const [driver, setDriver] = useState(null);
+  const [driver, setDriver] = useState(null);
   const userId = paramuserId || dbUser?.UserID;
 
   const formatCurrency = (amount) => {
@@ -43,16 +47,20 @@ const [driver, setDriver] = useState(null);
     return `PKR ${amount.toLocaleString("en-PK")}`;
   };
 
-useEffect(() => {
+
+
+
+ useEffect(() => {
   const fetchDriver = async () => {
     if (!userId) return;
     try {
-      console.log('user id to fetch driverid',userId);
+      console.log('Fetching driver for user id:', userId);
       const driverData = await getDriverById(userId);
       if (driverData) {
         setDriver(driverData);
-              console.log(' driverid',driver?.DriverID, );
-
+        console.log('Driver data:', driverData);
+        // Store driver ID for later use
+        await AsyncStorage.setItem('DriverID', driverData.DriverID.toString());
       }
     } catch (err) {
       console.error("Error fetching driver data:", err);
@@ -62,21 +70,43 @@ useEffect(() => {
   fetchDriver();
 }, [userId]);
 
+
+   // In DriverHome.js, modify the useEffect for push notifications:
+useEffect(() => {
+  const initializePushNotifications = async () => {
+    try {
+      // Wait until we have both userId and driverId
+      if (userId && driver?.DriverID) {
+        const alreadyAsked = await AsyncStorage.getItem('PushPermissionAsked');
+        
+        if (!alreadyAsked) {
+          await registerForPushNotificationsAsync(userId);
+          await AsyncStorage.setItem('PushPermissionAsked', 'true');
+        }
+      }
+    } catch (err) {
+      console.error('❌ Push notification initialization error:', err);
+    }
+  };
+
+  initializePushNotifications();
+}, [userId, driver]); // Add driver to dependencies
+
   useFocusEffect(
-  React.useCallback(() => {
-    const onBackPress = () => {
-      Alert.alert('Exit App', 'Do you want to exit?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Exit', onPress: () => BackHandler.exitApp() },
-      ]);
-      return true;
-    };
+    React.useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert('Exit App', 'Do you want to exit?', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Exit', onPress: () => BackHandler.exitApp() },
+        ]);
+        return true;
+      };
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-    return () => subscription.remove(); // ✅ Use `.remove()` instead
-  }, [])
-);
+      return () => subscription.remove(); // ✅ Use `.remove()` instead
+    }, [])
+  );
 
 
   useEffect(() => {
@@ -160,219 +190,219 @@ useEffect(() => {
   );
 
   return (
-     <SafeAreaView style={styles.safeArea}>
-    <StatusBar backgroundColor="#d63384" barStyle="light-content" />
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <FontAwesome5 name="arrow-left" size={24} color="white" />
-          <Text style={styles.backText}>Saheli</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            console.log("Menu opened");
-            setMenuVisible(true);
-          }}
-        >
-          <MaterialIcons name="menu" size={30} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Menu Overlay (render always, handle inside) */}
-      <DriverMenuOverlay
-        visible={menuVisible}
-        closeModal={() => setMenuVisible(false)}
-        navigation={navigation}
-        userId={userId}
-        user={dbUser}
-      />
-
-      {/* Swiper */}
-      <View style={styles.sliderContainer}>
-        <Swiper
-          autoplay
-          autoplayTimeout={3}
-          showsButtons
-          activeDotColor="#d63384"
-          nextButton={<Text style={styles.sliderButton}>›</Text>}
-          prevButton={<Text style={styles.sliderButton}>‹</Text>}
-        >
-          <Image source={require("../../assets/bg.png")} style={styles.image} />
-          <Image source={require("../../assets/slider2.png")} style={styles.image} />
-          <Image source={require("../../assets/slider3.jpg")} style={styles.image} />
-          <Image source={require("../../assets/slider4.jpg")} style={styles.image} />
-        </Swiper>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color="#d63384" />
-        <TextInput placeholder="Where would you go?" placeholderTextColor="#888" style={styles.searchInput} />
-      </View>
-
-      {/* Toggle Buttons */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, activeTab === "OfferRide" && styles.activeToggle]}
-          onPress={() => setActiveTab("OfferRide")}
-        >
-          <Text
-            style={[
-              styles.toggleText,
-              activeTab === "OfferRide" ? styles.activeToggleText : styles.inactiveToggleText,
-            ]}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar backgroundColor="#d63384" barStyle="light-content" />
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <FontAwesome5 name="arrow-left" size={24} color="white" />
+            <Text style={styles.backText}>Saheli</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              console.log("Menu opened");
+              setMenuVisible(true);
+            }}
           >
-            Offer Ride
-          </Text>
-        </TouchableOpacity>
-       <TouchableOpacity
-  style={[styles.toggleButton, activeTab === "OfferCarpool" && styles.activeToggle]}
-  onPress={() => {
-    setActiveTab("OfferCarpool");
-    navigation.navigate("OfferCarpool", {
-      userId: userId,
-      driverId: driver?.DriverID,  // Pass driverId
-    });
-  }}
->
+            <MaterialIcons name="menu" size={30} color="white" />
+          </TouchableOpacity>
+        </View>
 
-          <Text
-            style={[
-              styles.toggleText,
-              activeTab === "OfferCarpool" ? styles.activeToggleText : styles.inactiveToggleText,
-            ]}
+        {/* Menu Overlay (render always, handle inside) */}
+        <DriverMenuOverlay
+          visible={menuVisible}
+          closeModal={() => setMenuVisible(false)}
+          navigation={navigation}
+          userId={userId}
+          user={dbUser}
+        />
+
+        {/* Swiper */}
+        <View style={styles.sliderContainer}>
+          <Swiper
+            autoplay
+            autoplayTimeout={3}
+            showsButtons
+            activeDotColor="#d63384"
+            nextButton={<Text style={styles.sliderButton}>›</Text>}
+            prevButton={<Text style={styles.sliderButton}>‹</Text>}
           >
-            Offer Carpool
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <Image source={require("../../assets/bg.png")} style={styles.image} />
+            <Image source={require("../../assets/slider2.png")} style={styles.image} />
+            <Image source={require("../../assets/slider3.jpg")} style={styles.image} />
+            <Image source={require("../../assets/slider4.jpg")} style={styles.image} />
+          </Swiper>
+        </View>
 
-      {/* Ride History */}
-      <View style={styles.historySection}>
-        {rideHistory.length > 0 ? (
-          <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Recent Rides</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("History", { rideHistory })}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.noRidesContainer}>
-            <Text style={styles.ridehistorytitle}>Your Ride History</Text>
-            <Text style={styles.emptyText}>
-              No rides found yet. Once you start booking rides, they'll appear here!
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="search" size={20} color="#d63384" />
+          <TextInput placeholder="Where would you go?" placeholderTextColor="#888" style={styles.searchInput} />
+        </View>
+
+        {/* Toggle Buttons */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            style={[styles.toggleButton, activeTab === "OfferRide" && styles.activeToggle]}
+            onPress={() => setActiveTab("OfferRide")}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                activeTab === "OfferRide" ? styles.activeToggleText : styles.inactiveToggleText,
+              ]}
+            >
+              Offer Ride
             </Text>
-          </View>
-        )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, activeTab === "OfferCarpool" && styles.activeToggle]}
+            onPress={() => {
+              setActiveTab("OfferCarpool");
+              navigation.navigate("OfferCarpool", {
+                userId: userId,
+                driverId: driver?.DriverID,  // Pass driverId
+              });
+            }}
+          >
 
-        <FlatList
-          data={rideHistory.slice(0, 2)}
-          keyExtractor={(item) => item.ride_history_id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.historyCard}>
-              <View style={styles.historyTop}>
-                <Text style={styles.historyDate}>{formatDateTime(item.ride_date)}</Text>
-                <Text style={styles.historyAmount}>{formatCurrency(item.fare_amount)}</Text>
-              </View>
-              <View style={styles.locationContainer}>
-                <View style={styles.locationItem}>
-                  <FontAwesome5 name="dot-circle" size={14} color="#d63384" />
-                  <Text style={styles.locationText}>{item.pickup_location}</Text>
-                </View>
-                <View style={[styles.locationItem, { marginTop: 5 }]}>
-                  <FontAwesome5 name="map-marker-alt" size={14} color="#d63384" />
-                  <Text style={styles.locationText}>{item.dropoff_location}</Text>
-                </View>
-              </View>
+            <Text
+              style={[
+                styles.toggleText,
+                activeTab === "OfferCarpool" ? styles.activeToggleText : styles.inactiveToggleText,
+              ]}
+            >
+              Offer Carpool
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Ride History */}
+        <View style={styles.historySection}>
+          {rideHistory.length > 0 ? (
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyTitle}>Recent Rides</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("History", { rideHistory })}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.noRidesContainer}>
+              <Text style={styles.ridehistorytitle}>Your Ride History</Text>
+              <Text style={styles.emptyText}>
+                No rides found yet. Once you start booking rides, they'll appear here!
+              </Text>
             </View>
           )}
-          contentContainerStyle={styles.historyList}
-          scrollEnabled={false}
-        />
-      </View>
 
-      {/* Rating Modal */}
-      <Modal transparent visible={showRating && !hasRated} animationType="fade">
-        <View style={styles.ratingOverlay}>
-          <View style={styles.ratingContainer}>
-            <Text style={styles.ratingTitle}>Rate Your Experience</Text>
-            <Text style={styles.ratingSubtitle}>How would you rate Saheli?</Text>
-            {renderStars()}
-            <Text style={styles.ratingText}>
-              {rating > 0 ? `You selected: ${rating} star${rating > 1 ? "s" : ""}` : "Tap a star to rate"}
-            </Text>
-            <View style={styles.ratingButtons}>
-              <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingButtonSecondary]}
-                onPress={() => setShowRating(false)}
-              >
-                <Text style={styles.ratingButtonTextSecondary}>Maybe Later</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingButtonPrimary]}
-                onPress={submitRating}
-                disabled={rating === 0}
-              >
-                <Text style={styles.ratingButtonTextPrimary}>Submit Rating</Text>
-              </TouchableOpacity>
+          <FlatList
+            data={rideHistory.slice(0, 2)}
+            keyExtractor={(item) => item.ride_history_id.toString()}
+            renderItem={({ item }) => (
+              <View style={styles.historyCard}>
+                <View style={styles.historyTop}>
+                  <Text style={styles.historyDate}>{formatDateTime(item.ride_date)}</Text>
+                  <Text style={styles.historyAmount}>{formatCurrency(item.fare_amount)}</Text>
+                </View>
+                <View style={styles.locationContainer}>
+                  <View style={styles.locationItem}>
+                    <FontAwesome5 name="dot-circle" size={14} color="#d63384" />
+                    <Text style={styles.locationText}>{item.pickup_location}</Text>
+                  </View>
+                  <View style={[styles.locationItem, { marginTop: 5 }]}>
+                    <FontAwesome5 name="map-marker-alt" size={14} color="#d63384" />
+                    <Text style={styles.locationText}>{item.dropoff_location}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            contentContainerStyle={styles.historyList}
+            scrollEnabled={false}
+          />
+        </View>
+
+        {/* Rating Modal */}
+        <Modal transparent visible={showRating && !hasRated} animationType="fade">
+          <View style={styles.ratingOverlay}>
+            <View style={styles.ratingContainer}>
+              <Text style={styles.ratingTitle}>Rate Your Experience</Text>
+              <Text style={styles.ratingSubtitle}>How would you rate Saheli?</Text>
+              {renderStars()}
+              <Text style={styles.ratingText}>
+                {rating > 0 ? `You selected: ${rating} star${rating > 1 ? "s" : ""}` : "Tap a star to rate"}
+              </Text>
+              <View style={styles.ratingButtons}>
+                <TouchableOpacity
+                  style={[styles.ratingButton, styles.ratingButtonSecondary]}
+                  onPress={() => setShowRating(false)}
+                >
+                  <Text style={styles.ratingButtonTextSecondary}>Maybe Later</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.ratingButton, styles.ratingButtonPrimary]}
+                  onPress={submitRating}
+                  disabled={rating === 0}
+                >
+                  <Text style={styles.ratingButtonTextPrimary}>Submit Rating</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
+        </Modal>
+
+
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem}>
+            <MaterialIcons name="home" size={25} color="#d63384" />
+            <Text style={styles.navText}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
+            <MaterialIcons name="favorite-border" size={25} color="#888" />
+            <Text style={styles.navText}>Favorites</Text>
+          </TouchableOpacity>
+
+          <View style={styles.navItem}></View>
+
+          <TouchableOpacity style={styles.navItem}
+            onPress={() => navigation.navigate('Offers')}>
+            <MaterialIcons name="local-offer" size={25} color="#888" />
+            <Text style={styles.navText}>Offers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('Profile', { userId })}
+          >
+            <MaterialIcons name="person" size={25} color="#888" />
+            <Text style={styles.navText}>Profile</Text>
+          </TouchableOpacity>
+
+          {/* Logo */}
+          <TouchableOpacity style={styles.walletContainer}>
+            <View style={styles.walletIcon}>
+              <Image
+                source={SaheliLogo}
+                style={styles.walletImage}
+                resizeMode="contain"
+              />          </View>
+            <Text style={styles.walletText}>   </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
- 
-
-
-      {/* Bottom Navigation */}
-           <View style={styles.bottomNav}>
-             <TouchableOpacity style={styles.navItem}>
-               <MaterialIcons name="home" size={25} color="#d63384" />
-               <Text style={styles.navText}>Home</Text>
-             </TouchableOpacity>
-             <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
-               <MaterialIcons name="favorite-border" size={25} color="#888" />
-               <Text style={styles.navText}>Favorites</Text>
-             </TouchableOpacity>
-     
-             <View style={styles.navItem}></View>
-     
-             <TouchableOpacity style={styles.navItem}
-               onPress={() => navigation.navigate('Offers')}>
-               <MaterialIcons name="local-offer" size={25} color="#888" />
-               <Text style={styles.navText}>Offers</Text>
-             </TouchableOpacity>
-             <TouchableOpacity
-               style={styles.navItem}
-               onPress={() => navigation.navigate('Profile', {userId})}
-             >
-               <MaterialIcons name="person" size={25} color="#888" />
-               <Text style={styles.navText}>Profile</Text>
-             </TouchableOpacity>
-     
-             {/* Logo */}
-             <TouchableOpacity style={styles.walletContainer}>
-               <View style={styles.walletIcon}>
-                 <Image
-                   source={SaheliLogo}
-                   style={styles.walletImage}
-                   resizeMode="contain"
-                 />          </View>
-               <Text style={styles.walletText}>   </Text>
-             </TouchableOpacity>
-           </View>
-         </View>
-         </SafeAreaView>
+      </View>
+    </SafeAreaView>
   );
 };
 
 
 
 const styles = StyleSheet.create({
-  
+
   safeArea: {
-  flex: 1,
-  backgroundColor: "#fff", // To match your header background
-},
+    flex: 1,
+    backgroundColor: "#fff", // To match your header background
+  },
 
   container: {
     flex: 1,

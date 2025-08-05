@@ -9,28 +9,76 @@ import { StatusBar } from 'react-native';
 import { Alert, ToastAndroid } from 'react-native'; // Already imported mostly
 import axios from 'axios';
 import { API_URL } from '../../api';
+import { registerForPushNotificationsAsync } from '../utils/NotificationSetup';
+// Add to imports in DriverCarpoolStatusScreen.js
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
 const BlackColor='#000000'
 
 const DriverCarpoolStatusScreen = ({ route }) => {
-  const { driverId } = route.params;
+  const { driverId ,userId} = route.params;
+  console.log('DriverID:', driverId, 'UserID:', userId);
+console.log('API_URL:', API_URL);
   const [activeTab, setActiveTab] = useState('Requests');
   const [loading, setLoading] = useState(true);
   const [matchedRequests, setMatchedRequests] = useState([]);
   const [allPendingRequests, setAllPendingRequests] = useState([]);
   const [showMatchedOnly, setShowMatchedOnly] = useState(false);
+  const [acceptedRequests, setAcceptedRequests] = useState([]);
 
-  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
+}
 
-const handleAccept = (requestId) => {
-  // Call your accept API or function here
-  console.log('Accepted:', requestId);
-  ToastAndroid.show('Request Accepted', ToastAndroid.SHORT);
+const handleAccept = async (requestId) => {
+  Alert.alert(
+    "Confirm Acceptance",
+    "Are you sure you want to accept this request?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Accept",
+        onPress: async () => {
+          try {
+            const acceptRes = await axios.post(`${API_URL}/api/driver/carpool/accept-request`, {
+              requestId,
+              driverId
+            });
+
+            if (acceptRes.data.success) {
+              ToastAndroid.show('Request Accepted', ToastAndroid.SHORT);
+
+              // ✅ Only call once
+              try {
+                await axios.post(`${API_URL}/api/notification/send-to-passenger`, {
+                  requestId
+                });
+              } catch (notifError) {
+                console.error('Notification failed (non-critical):', notifError);
+              }
+
+              fetchRequests();
+            } else {
+              throw new Error('Failed to update request');
+            }
+          } catch (error) {
+            console.error('Error accepting request:', error);
+            ToastAndroid.show('Failed to accept request', ToastAndroid.SHORT);
+          }
+        }
+      }
+    ],
+    { cancelable: true }
+  );
 };
+
+
+
 
 const handleReject = (requestId) => {
   Alert.alert(
@@ -56,25 +104,48 @@ const handleReject = (requestId) => {
 };
 
 
-  useEffect(() => {
-    if (activeTab === 'Requests') fetchRequests();
-  }, [activeTab]);
-
-  const fetchRequests = async () => {
-    setLoading(true);
+// In DriverCarpoolStatusScreen.js, modify the useEffect:
+// In DriverCarpoolStatusScreen.js, update the useEffect:
+useEffect(() => {
+  const registerNotifications = async () => {
     try {
-      const [matchedRes, pendingRes] = await Promise.all([
-        axios.get(`${API_URL}/api/driver/carpool/matched-requests-all/${driverId}`),
-        axios.get(`${API_URL}/api/driver/carpool/all-pending-requests`)
-      ]);
-      setMatchedRequests(matchedRes.data.matched || []);
-      setAllPendingRequests(pendingRes.data.allPending || []);
-    } catch (e) {
-      console.error('Error fetching requests:', e);
-    } finally {
-      setLoading(false);
+      if (userId) {
+        console.log("Registering push notifications for user:", userId);
+        await registerForPushNotificationsAsync(userId);
+      }
+    } catch (error) {
+      console.error("Push notification registration error:", error);
     }
   };
+
+  registerNotifications();
+  
+  if (activeTab === 'Requests' && driverId) {
+    fetchRequests();
+  }
+}, [activeTab, userId, driverId]);
+
+ // In DriverCarpoolStatusScreen.js, update the fetchRequests function:
+const fetchRequests = async () => {
+  setLoading(true);
+  try {
+    const [matchedRes, pendingRes, acceptedRes] = await Promise.all([
+      axios.get(`${API_URL}/api/driver/carpool/matched-requests-all/${driverId}`),
+      axios.get(`${API_URL}/api/driver/carpool/all-pending-requests`),
+      axios.get(`${API_URL}/api/driver/carpool/accepted-requests/${driverId}`),
+    ]);
+
+    setMatchedRequests(matchedRes.data?.matched || []);
+    setAllPendingRequests(pendingRes.data?.allPending || []);
+    setAcceptedRequests(acceptedRes.data?.accepted || []);
+  } catch (e) {
+    console.error('Error fetching requests:', e);
+    // Add error handling
+    ToastAndroid.show('Failed to load requests', ToastAndroid.SHORT);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const renderTab = (tabName) => (
     <TouchableOpacity
@@ -122,35 +193,26 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
   ].filter(pref => pref.value && pref.value !== 'no-preference');
 
   const renderStatusBadge = (status) => {
-    let backgroundColor = '#999';
-    let label = status?.toUpperCase();
+  let backgroundColor = '#999';
+  let label = status?.toUpperCase();
 
-    if (status === 'matched') {
-      backgroundColor = '#4CAF50';
-      label = 'MATCHED';
-    } else if (status === 'pending') {
-      backgroundColor = isMatched ? '#17A2B8' : '#FFC107';
-      label = isMatched ? 'REQUESTED' : 'PENDING';
-    } else if (status === 'rejected') {
-      backgroundColor = '#F44336';
-      label = 'REJECTED';
-    }
+  if (status === 'accepted') {
+    backgroundColor = '#4CAF50';
+    label = 'ACCEPTED';
+  } else if (status === 'pending') {
+    backgroundColor = isMatched ? '#17A2B8' : '#FFC107';
+    label = isMatched ? 'REQUESTED' : 'PENDING';
+  } else if (status === 'rejected') {
+    backgroundColor = '#F44336';
+    label = 'REJECTED';
+  }
 
-    return (
-      <View style={[styles.badge, { backgroundColor }]}>
-        <Text style={[
-          styles.badgeText,
-          label === 'REQUESTED' && {
-            textShadowColor: '#00BFFF',
-            textShadowOffset: { width: 0, height: 0 },
-            textShadowRadius: 6,
-          }
-        ]}>
-          {label}
-        </Text>
-      </View>
-    );
-  };
+  return (
+    <View style={[styles.badge, { backgroundColor }]}>
+      <Text style={styles.badgeText}>{label}</Text>
+    </View>
+  );
+};
 
   const dayAbbreviations = {
     Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
@@ -351,6 +413,29 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
     );
   };
 
+  const renderAcceptedRequests = () => {
+  if (loading) {
+    return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="checkmark-done-circle-outline" size={20} color="#28a745" />
+          <Text style={styles.sectionHeaderText}>Accepted Requests ({acceptedRequests.length})</Text>
+        </View>
+        {acceptedRequests.length === 0 ? (
+          <Text style={styles.emptyText}>No accepted requests yet.</Text>
+        ) : (
+          acceptedRequests.map((req) => renderRequestCard(req, req.RequestID, true))
+        )}
+      </View>
+    </ScrollView>
+  );
+};
+
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar backgroundColor={primaryColor} barStyle="light-content" />
@@ -388,11 +473,15 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
           </TouchableOpacity>
         </View>
 
-        {activeTab === 'Requests' ? renderRequests() : (
-          <View style={styles.placeholder}>
-            <Ionicons name="car-sport-outline" size={50} color={primaryColor} />
-            <Text style={styles.placeholderText}>No {activeTab.toLowerCase()} rides yet.</Text>
-          </View>
+       {activeTab === 'Requests'
+  ? renderRequests()
+  : activeTab === 'Accepted'
+  ? renderAcceptedRequests()
+  : (
+    <View style={styles.placeholder}>
+      <Ionicons name="car-sport-outline" size={50} color={primaryColor} />
+      <Text style={styles.placeholderText}>No {activeTab.toLowerCase()} rides yet.</Text>
+    </View>
         )}
       </View>
     </SafeAreaView>

@@ -114,6 +114,52 @@ router.get('/all-pending-requests', async (_req, res) => {
 });
 
 
+// Add this route to DriverCarpool.js
+router.post('/accept-request', async (req, res) => {
+  const { requestId, driverId } = req.body;
+  
+  try {
+    // Update the request status and set driver ID and acceptance time
+    const result = await client.query(
+      `UPDATE "Carpool_Request_Status" 
+       SET status = 'accepted',
+           "DriverID" = $1,
+           accepted_time = NOW()
+       WHERE "RequestID" = $2
+       RETURNING *`,
+      [driverId, requestId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    res.json({ success: true, request: result.rows[0] });
+  } catch (err) {
+    console.error('Error accepting request:', err);
+    res.status(500).json({ error: 'Failed to accept request' });
+  }
+});
+
+// GET /accepted-requests/:driverId
+router.get('/accepted-requests/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+
+  try {
+    const result = await client.query(
+      `SELECT * FROM "Carpool_Request_Status"
+       WHERE status = 'accepted' AND "DriverID" = $1
+       ORDER BY "accepted_time" DESC`,
+      [driverId]
+    );
+
+    res.json({ accepted: result.rows });
+  } catch (err) {
+    console.error('Error fetching accepted requests:', err);
+    res.status(500).json({ error: 'Failed to fetch accepted requests' });
+  }
+});
+
 
 
 

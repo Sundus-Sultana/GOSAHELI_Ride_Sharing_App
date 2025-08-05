@@ -26,6 +26,8 @@ import { getUserById ,getDriverById} from '../../api';
 import { ScrollView } from "react-native-gesture-handler";
 import axios from 'axios'; // ✅ Make sure this is at the top
 import { API_URL } from '../../api.js'; 
+import { registerForPushNotificationsAsync } from '../utils/NotificationSetup'; // Adjust path if needed
+
 
 
 
@@ -45,6 +47,28 @@ const Home = ({ route }) => {
   const userId = route?.params?.userId ?? auth.currentUser?.uid;
   const userName = route?.params?.userName ?? auth.currentUser?.displayName;
 
+ useEffect(() => {
+    const askForPushOnce = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('UserID');
+        const alreadyAsked = await AsyncStorage.getItem('PushPermissionAsked');
+
+        if (!alreadyAsked && userId) {
+          await registerForPushNotificationsAsync(userId);
+          await AsyncStorage.setItem('PushPermissionAsked', 'true');
+        } else {
+          console.log('✅ Push permission already asked or userId missing');
+        }
+      } catch (err) {
+        console.error('❌ Error checking push permission status:', err);
+      }
+    };
+
+    askForPushOnce();
+  }, []);
+
+
+  
   useEffect(() => {
   const fetchPassengerId = async () => {
     if (!userId) return;

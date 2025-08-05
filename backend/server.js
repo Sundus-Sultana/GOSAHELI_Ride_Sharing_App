@@ -37,6 +37,11 @@ const upload = multer({ storage });
 
 // ========== ✅Routes ==========
 
+//  Notify Passenger
+const notificationPassengerRoutes = require('./routes/NotificationPassenger');
+app.use('/api/notification', notificationPassengerRoutes);
+
+
 //  ProfileUpdation
 const profileUpdationRoutes = require('./routes/ProfileUpdation');
 app.use(profileUpdationRoutes);
