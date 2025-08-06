@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons ,FontAwesome5} from '@expo/vector-icons';
-import { getCarpoolRequestsByPassenger,deleteCarpoolRequest } from '../../api';
+import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,API_URL } from '../../api';
 import moment from 'moment';
 
 const primaryColor = '#D64584';
@@ -22,13 +22,36 @@ console.log("Price:", price);
     upcoming: [],
     completed: [],
     cancelled: [],
-    pending: []
+    pending: [],
+    accepted:[]
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchRides();
   }, []);
+  useEffect(() => {
+  if (selectedTab === 'accepted') {
+    fetchAcceptedRides(); // fetch only when selected
+  }
+}, [selectedTab]);
+
+  const fetchAcceptedRides = async () => {
+  try {
+const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}`);
+    const json = await res.json();
+     console.log("Accepted rides data:", json.data); 
+
+    if (json.success) {
+      setRides(prev => ({ ...prev, accepted: json.data }));
+    } else {
+      Alert.alert("Error", json.message || "Could not fetch accepted rides");
+    }
+  } catch (err) {
+    console.error("Fetch accepted rides error:", err);
+  }
+};
+
 
   const handleDelete = async (requestId) => {
   Alert.alert(
@@ -84,7 +107,8 @@ console.log("Price:", price);
         upcoming: [],
         completed: [],
         cancelled: [],
-        pending: []
+        pending: [],
+        accepted:[]
       };
 
       const today = new Date();
@@ -240,30 +264,55 @@ if (item.allows_luggage) {
   </View>
 )}
 
-
-        {/* Footer */}
-        <View style={styles.cardFooter}>
-{item.status?.toLowerCase() !== 'completed' && item.status?.toLowerCase() !== 'cancelled' && (
-            <TouchableOpacity
-  onPress={() => {
-    handleDelete(item.RequestID);
+ {/* Driver Info - Moved outside footer and styled differently */}
+      {selectedTab === 'accepted' && item.driver_name && (
+        <View style={styles.driverInfoContainer}>
+     <Image
+  source={{ 
+    uri: item.driver_photo.startsWith('/') 
+      ? `${API_URL}${item.driver_photo}`
+      : `${API_URL}/uploads/${item.driver_photo}`
   }}
-  style={styles.iconButton}
-  disabled={isDeleting && deletingId === item.RequestID}
->
-  {isDeleting && deletingId === item.RequestID ? (
-    <ActivityIndicator size="small" color={primaryColor} />
-  ) : (
-    <Ionicons name="trash-outline" size={20} color={primaryColor} />
-  )}
-</TouchableOpacity>
-)}
-         
-          <Text style={[styles.actionButtonText, { color: primaryColor }]}>Fare (per day):  {displayFare}</Text>
+  style={styles.driverImage}
+  onError={(e) => console.log("Image loading error:", e.nativeEvent.error)}
+  defaultSource={require('../../assets/empty_avatar.jpg')}
+/>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.driverName}>{item.driver_name}</Text>
+           <Text style={styles.vehicleInfo}>
+  {item.color ? `${item.color} ` : ''}
+  {item.VehicleModel || 'No vehicle info'}
+  {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
+</Text>
+          </View>
         </View>
+      )}
+
+          {/* Footer */}
+      <View style={styles.cardFooter}>
+        {item.status?.toLowerCase() !== 'completed' && item.status?.toLowerCase() !== 'cancelled' && (
+          <TouchableOpacity
+            onPress={() => handleDelete(item.RequestID)}
+            style={styles.iconButton}
+            disabled={isDeleting && deletingId === item.RequestID}
+          >
+            {isDeleting && deletingId === item.RequestID ? (
+              <ActivityIndicator size="small" color={primaryColor} />
+            ) : (
+              <Ionicons name="trash-outline" size={20} color={primaryColor} />
+            )}
+          </TouchableOpacity>
+        )}
+        
+        <Text style={[styles.actionButtonText, { color: primaryColor }]}>
+          Fare (per day): {displayFare}
+        </Text>
       </View>
-    );
-  };
+
+      
+    </View>
+  );
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -278,7 +327,7 @@ if (item.allows_luggage) {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {['upcoming', 'pending', 'completed', 'cancelled'].map(tab => (
+        {['upcoming', 'pending','accepted', 'completed', 'cancelled'].map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, selectedTab === tab && styles.activeTab]}
@@ -297,7 +346,7 @@ if (item.allows_luggage) {
       ) : (
         <FlatList
           data={rides[selectedTab]}
-          keyExtractor={(item, index) => `${item.requestid}-${index}`}
+keyExtractor={(item, index) => `${item.RequestID || item.requestid}-${index}`}
           renderItem={renderCard}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -365,7 +414,45 @@ const styles = StyleSheet.create({
     backgroundColor: primaryColor, paddingVertical: 6, paddingHorizontal: 6,
     borderRadius: 20, marginRight: 6, marginTop: 4
   },
-  dayText: { color: '#fff', fontSize: 12, fontWeight: '600' }
+  dayText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingBottom: 10, 
+  },
+  
+  driverInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+
+  driverImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+
+  driverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: darkGrey,
+  },
+
+  vehicleInfo: {
+    fontSize: 14,
+    color: '#666',
+  },
 });
+
 
 export default CarpoolStatusScreen;

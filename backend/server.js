@@ -75,6 +75,13 @@ app.use('/become-driver', becomeDriverRoute);
 const driverCarpoolRoutes = require('./routes/DriverCarpool');
 app.use('/api/driver/carpool', driverCarpoolRoutes);
 
+//  Pssenger's Accepted Carpools
+const acceptedPassengerRoutes = require('./routes/AcceptedPassengerCarpools');
+app.use('/api', acceptedPassengerRoutes);
+
+const acceptedPassengerCarpools = require('./routes/AcceptedPassengerCarpools');
+app.use('/api/carpool', acceptedPassengerCarpools);
+
 //  Vehicle img url to uploads
 app.use('/api/carpool', carpoolRoutes);
 app.use('/Vehicle_Images', express.static(path.join(__dirname, 'Vehicle_Images')));

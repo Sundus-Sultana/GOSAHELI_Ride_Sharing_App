@@ -6,11 +6,10 @@ import {
 import { Ionicons ,MaterialIcons} from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
-import { Alert, ToastAndroid } from 'react-native'; // Already imported mostly
+import { Alert, ToastAndroid } from 'react-native'; 
 import axios from 'axios';
 import { API_URL } from '../../api';
 import { registerForPushNotificationsAsync } from '../utils/NotificationSetup';
-// Add to imports in DriverCarpoolStatusScreen.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native'; 
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
