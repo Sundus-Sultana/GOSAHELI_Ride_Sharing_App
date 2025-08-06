@@ -110,31 +110,31 @@ export default function ChatScreen({ route }) {
     const displayTime = item.createdAt?.toDate
       ? new Date(item.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '...';
-       const profileImageUri = senderPhotos[item.senderId]
-      ? `${API_URL}/uploads/${senderPhotos[item.senderId]}`
-      : null;
+      const profileImageUri = senderPhotos[item.senderId]
+  ? senderPhotos[item.senderId].startsWith('/')
+    ? `${API_URL}${senderPhotos[item.senderId]}`
+    : `${API_URL}/uploads/${senderPhotos[item.senderId]}`
+  : null;
 
     return (
-      <View style={[styles.messageContainer, isMe ? styles.rightAlign : styles.leftAlign]}>
-        {!isMe && (
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{item.sender[0].toUpperCase()}</Text>
-          </View>
+       <View style={[styles.messageContainer, isMe ? styles.rightAlign : styles.leftAlign]}>
+    {!isMe && (
+      <View style={styles.avatar}>
+        {profileImageUri ? (
+          <Image source={{ uri: profileImageUri }} style={styles.avatarImage} />
+        ) : (
+          <Text style={styles.avatarText}>{item.sender[0].toUpperCase()}</Text>
         )}
-        <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-          <Text style={styles.senderLabel}>{item.sender}</Text>
-          <Text style={[styles.messageText, !isMe && { color: '#ffffff' }]}>{item.text}</Text>
-          <Text style={styles.timestamp}>{displayTime}</Text>
-        </View>
-        {!isMe && (
-          <View style={styles.senderProfileRow}>
-            {profileImageUri && (
-              <Image source={{ uri: profileImageUri }} style={styles.profilePhotoUnderMessage} />
-            )}
-            <Text style={styles.profileNameUnderMessage}>{item.sender}</Text>
-          </View>
-          )}
       </View>
+    )}
+    <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+      {!isMe && <Text style={styles.senderLabel}>{item.sender}</Text>}
+      <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
+        {item.text}
+      </Text>
+      <Text style={styles.timestamp}>{displayTime}</Text>
+    </View>
+  </View>
     );
   };
 
@@ -159,14 +159,18 @@ export default function ChatScreen({ route }) {
       <Ionicons name="arrow-back" size={24} color="white" />
     </TouchableOpacity>
 
-    <Image
-      source={
-        receiverUserPhoto
-          ? { uri: `${API_URL}/uploads/${receiverUserPhoto}` }
-          : require('../../assets/empty_avatar.jpg')
-      }
-      style={styles.avatarImage}
-    />
+   <Image
+  source={
+    receiverUserPhoto
+      ? { uri: receiverUserPhoto.startsWith('/') 
+          ? `${API_URL}${receiverUserPhoto}`
+          : `${API_URL}/uploads/${receiverUserPhoto}`
+        }
+      : require('../../assets/empty_avatar.jpg')
+  }
+  style={styles.headerAvatarImage}
+  onError={(e) => console.log("Header image error:", e.nativeEvent.error)}
+/>
 
     <Text style={styles.headerText}>{receiverUserName}</Text>
   </View>
@@ -294,15 +298,7 @@ headerContent: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
   },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#d63384',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-  },
+
   avatarText: {
     color: '#fff',
     fontWeight: 'bold',
@@ -322,12 +318,17 @@ headerContent: {
     borderBottomRightRadius: 0,
   },
   otherBubble: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f8f8f8',
     borderBottomLeftRadius: 0,
   },
-  messageText: {
-    fontSize: 15,
+ // Add new text color styles
+  myMessageText: {
     color: '#fff',
+    fontSize: 15,
+  },
+  otherMessageText: {
+    color: '#d63384', // Pink color for receiver messages
+    fontSize: 15,
   },
   senderLabel: {
     fontSize: 12,
@@ -345,12 +346,30 @@ headerContent: {
   marginRight: 10,
 },
 
-avatarImage: {
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  marginRight: 10,
-},
+ // Update avatar styles
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // Update header avatar
+  headerAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+
 senderProfileRow: {
   flexDirection: 'row',
   alignItems: 'center',

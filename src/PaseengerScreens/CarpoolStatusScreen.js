@@ -8,13 +8,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons ,FontAwesome5} from '@expo/vector-icons';
 import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,API_URL } from '../../api';
 import moment from 'moment';
+import { useNavigation } from '@react-navigation/native';
+import { getUserById } from '../utils/ApiCalls';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
 
 const CarpoolStatusScreen = ({ route }) => {
   const { userId, passengerId ,price} = route.params || {};
-console.log("Price:", price); 
+console.log("Price:", price);
+const navigation = useNavigation(); 
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
    const [selectedTab, setSelectedTab] = useState('upcoming');
@@ -35,6 +38,45 @@ console.log("Price:", price);
     fetchAcceptedRides(); // fetch only when selected
   }
 }, [selectedTab]);
+
+const handleChatPress = async (requestId, driverUserId, driverName, driverPhoto) => {
+  try {
+    setLoading(true);
+    
+    // Get passenger details
+    const passengerDetails = await getUserById(userId);
+    if (!passengerDetails) {
+      Alert.alert("Error", "Could not load your passenger info");
+      return;
+    }
+
+    // Get driver details
+    const driverDetails = await getUserById(driverUserId);
+    if (!driverDetails) {
+      Alert.alert("Error", "Could not load driver info");
+      return;
+    }
+
+    navigation.navigate('ChatUI', {
+      driverId: driverUserId,
+      userId,
+      chatRoomId: `chat_request_${requestId}`,
+      currentUser: 'passenger',
+      currentUserId: userId,
+      currentUserName: passengerDetails.username,
+      currentUserPhoto: passengerDetails.photo_url,
+      receiverUserId: driverUserId,
+      receiverUserName: driverName,
+      receiverUserPhoto: driverPhoto
+    });
+
+  } catch (err) {
+    console.error('Error opening chat:', err);
+    Alert.alert("Error", "Failed to open chat");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchAcceptedRides = async () => {
   try {
@@ -266,27 +308,38 @@ if (item.allows_luggage) {
 
  {/* Driver Info - Moved outside footer and styled differently */}
       {selectedTab === 'accepted' && item.driver_name && (
-        <View style={styles.driverInfoContainer}>
-     <Image
-  source={{ 
-    uri: item.driver_photo.startsWith('/') 
-      ? `${API_URL}${item.driver_photo}`
-      : `${API_URL}/uploads/${item.driver_photo}`
-  }}
-  style={styles.driverImage}
-  onError={(e) => console.log("Image loading error:", e.nativeEvent.error)}
-  defaultSource={require('../../assets/empty_avatar.jpg')}
-/>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.driverName}>{item.driver_name}</Text>
-           <Text style={styles.vehicleInfo}>
-  {item.color ? `${item.color} ` : ''}
-  {item.VehicleModel || 'No vehicle info'}
-  {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
-</Text>
-          </View>
-        </View>
-      )}
+  <View style={styles.driverInfoContainer}>
+    <Image
+      source={{ 
+        uri: item.driver_photo.startsWith('/') 
+          ? `${API_URL}${item.driver_photo}`
+          : `${API_URL}/uploads/${item.driver_photo}`
+      }}
+      style={styles.driverImage}
+      onError={(e) => console.log("Image loading error:", e.nativeEvent.error)}
+      defaultSource={require('../../assets/empty_avatar.jpg')}
+    />
+    <View style={{ flex: 1 }}>
+      <Text style={styles.driverName}>{item.driver_name}</Text>
+      <Text style={styles.vehicleInfo}>
+        {item.color ? `${item.color} ` : ''}
+        {item.VehicleModel || 'No vehicle info'}
+        {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
+      </Text>
+    </View>
+    <TouchableOpacity
+  onPress={() => handleChatPress(
+    item.RequestID,
+    item.driver_user_id,
+    item.driver_name,
+    item.driver_photo
+  )}
+  style={styles.chatButton}
+>
+  <Ionicons name="chatbubble-ellipses-outline" size={24} color={primaryColor} />
+</TouchableOpacity>
+  </View>
+)}
 
           {/* Footer */}
       <View style={styles.cardFooter}>
@@ -452,6 +505,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  chatButton: {
+  padding: 8,
+  marginLeft: 10,
+},
 });
 
 
