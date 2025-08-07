@@ -45,15 +45,10 @@ export default function ChatScreen({ route }) {
     [receiverUserId]: receiverUserPhoto,
   };
 
-  useFocusEffect(
+ useFocusEffect(
   React.useCallback(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-     navigation.navigate('DriverCarpoolStatusScreen', {
-  tab: 'Accepted',
-  driverId,
-  userId
-});
-
+      navigation.goBack();
       return true;
     });
 
@@ -61,30 +56,58 @@ export default function ChatScreen({ route }) {
   }, [])
 );
 
-  useEffect(() => {
-    const q = query(collection(db, chatRoomId), orderBy('createdAt', 'asc'));
-    const unsubscribe = onSnapshot(q,
-      (snapshot) => {
-        const msgs = snapshot.docs.map(doc => ({
+
+ useEffect(() => {
+  const q = query(collection(db, chatRoomId), orderBy('createdAt', 'asc'));
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const grouped = [];
+      let lastDate = null;
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const timestamp = data.createdAt?.toDate?.();
+
+        if (timestamp) {
+          const dateStr = new Intl.DateTimeFormat('en-PK', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'Asia/Karachi',
+          }).format(timestamp);
+
+          if (dateStr !== lastDate) {
+            grouped.push({ type: 'date', date: dateStr, id: `date-${dateStr}` });
+            lastDate = dateStr;
+          }
+        }
+
+        grouped.push({
           id: doc.id,
-          ...doc.data(),
-        }));
-        setMessages(msgs);
-        setLoading(false);
+          ...data,
+          createdAt: timestamp || new Date(),
+          type: 'message',
+        });
+      });
 
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      },
-      (error) => {
-        console.error("Error loading messages:", error);
-        setLoading(false);
-        Alert.alert("Error", "Could not load messages. Please check your connection.");
-      }
-    );
+      setMessages(grouped);
+      setLoading(false);
 
-    return () => unsubscribe();
-  }, [chatRoomId]);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    },
+    (error) => {
+      console.error('Error loading messages:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Could not load messages. Please check your connection.');
+    }
+  );
+
+  return () => unsubscribe();
+}, [chatRoomId]);
+
 
   const sendMessage = async () => {
     if (!message.trim()) return;
@@ -106,10 +129,21 @@ export default function ChatScreen({ route }) {
   };
 
   const renderItem = ({ item }) => {
-    const isMe = item.senderId === currentUserId;
-    const displayTime = item.createdAt?.toDate
-      ? new Date(item.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : '...';
+    if (item.type === 'date') {
+    return (
+      <View style={styles.dateHeaderContainer}>
+        <Text style={styles.dateHeaderText}>{item.date}</Text>
+      </View>
+    );
+  }
+
+  const isMe = item.senderId === currentUserId;
+  const displayTime = new Intl.DateTimeFormat('en-PK', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Karachi',
+  }).format(item.createdAt);
       const profileImageUri = senderPhotos[item.senderId]
   ? senderPhotos[item.senderId].startsWith('/')
     ? `${API_URL}${senderPhotos[item.senderId]}`
@@ -132,7 +166,9 @@ export default function ChatScreen({ route }) {
       <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
         {item.text}
       </Text>
-      <Text style={styles.timestamp}>{displayTime}</Text>
+    <Text style={[styles.timestamp, isMe ? styles.myTimeText : styles.otherTimeText]}>
+  {displayTime}
+</Text>
     </View>
   </View>
     );
@@ -149,11 +185,7 @@ export default function ChatScreen({ route }) {
   <View style={styles.header}>
   <View style={styles.headerContent}>
     <TouchableOpacity
-      onPress={() => navigation.navigate('DriverCarpoolStatusScreen', {
-        tab: 'Accepted',
-        driverId,
-        userId
-      })}
+      onPress={() => navigation.goBack()}
       style={styles.backButton}
     >
       <Ionicons name="arrow-back" size={24} color="white" />
@@ -298,11 +330,21 @@ headerContent: {
     justifyContent: 'flex-start',
     alignSelf: 'flex-start',
   },
+  dateHeaderContainer: {
+  alignItems: 'center',
+  marginVertical: 8,
+},
 
-  avatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
+dateHeaderText: {
+  backgroundColor: '#e0e0e0',
+  color: '#555',
+  fontSize: 12,
+  paddingVertical: 4,
+  paddingHorizontal: 10,
+  borderRadius: 10,
+},
+
+
   bubble: {
     padding: 10,
     borderRadius: 15,
@@ -333,7 +375,7 @@ headerContent: {
   senderLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#ddd',
+    color: '#7a4260ff',
     marginBottom: 2,
   },
   timestamp: {
@@ -342,6 +384,13 @@ headerContent: {
     alignSelf: 'flex-end',
     marginTop: 4,
   },
+  myTimeText: {
+  color: '#f6f5f5ff', // white for sender time
+},
+
+otherTimeText: {
+  color: '#545151ff', // grey or customize for receiver time
+},
  backButton: {
   marginRight: 10,
 },
@@ -351,6 +400,8 @@ headerContent: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    borderColor:'#d63384',
+    borderWidth:1,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
@@ -362,6 +413,10 @@ headerContent: {
     height: '100%',
   },
 
+  avatarText: {
+    color: '#d63384',
+    fontWeight: 'bold',
+  },
   // Update header avatar
   headerAvatarImage: {
     width: 40,

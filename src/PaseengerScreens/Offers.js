@@ -157,6 +157,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginRight: 10,
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   button: {
     backgroundColor: '#ffff',
@@ -165,28 +170,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: 100,
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
    activeButton: {
     backgroundColor: 'white',
     borderWidth: 1,
-    borderColor: '#E54A80',
+    borderColor: '#d63384',
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
    activeButtonText: {
-    color: '#E54A80',
+    color: '#d63384',
   },
   disabledButton: {
     backgroundColor: '#ccc',
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
   },
   getDiscountButton: {
-    backgroundColor: '#E54A80',
+    backgroundColor: '#d63384',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 20,
     alignItems: 'center',
     marginBottom: 25,
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   getDiscountText: {
     color: 'white',
@@ -209,6 +234,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   referralTextContainer: {
     flex: 1,
@@ -225,10 +255,15 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   referralActionButton: {
-    backgroundColor: '#E54A80',
+    backgroundColor: '#d63384',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 5,
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   referralActionText: {
     color: 'white',
@@ -238,6 +273,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.5)',
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   modalContent: {
     backgroundColor: 'white',
@@ -270,20 +310,32 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   copyButton: {
-    backgroundColor: '#E54A80',
+    backgroundColor: '#d63384',
     padding: 8,
     borderRadius: 5,
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   copyButtonText: {
     color: 'white',
     fontSize: 14,
   },
   closeButton: {
-    backgroundColor: '#E54A80',
+    backgroundColor: '#d63384',
+    alignSelf:'center',
+    width:150,
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 20,
     marginTop: 20,
     alignItems: 'center',
+    elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
   },
   closeButtonText: {
     color: 'white',
