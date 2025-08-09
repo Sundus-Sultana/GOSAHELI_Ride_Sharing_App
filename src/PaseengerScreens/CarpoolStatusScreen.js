@@ -41,6 +41,16 @@ const navigation = useNavigation();
 }, [selectedTab]);
 
 useEffect(() => {
+  let interval = null;
+  if (passengerId) {
+    interval = setInterval(() => {
+      fetchRides();
+    }, 20000); // every 20 seconds
+  }
+  return () => clearInterval(interval);
+}, [passengerId]);
+
+useEffect(() => {
   if (route.params?.tab === 'Accepted') {
     setActiveTab('Accepted');
   }
@@ -222,43 +232,23 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
 };
 
 
-  const fetchRides = async () => {
-    try {
-      const res = await getCarpoolRequestsByPassenger(passengerId);
-      const allRides = res.data || [];
-
-      const categorized = {
-        upcoming: [],
-        completed: [],
-       rejected: [],
-        pending: [],
-        accepted:[]
-      };
-
-      const today = new Date();
-
-      allRides.forEach((ride) => {
-        const rideDate = new Date(ride.date);
-        const status = (ride.status || '').toLowerCase();
-
-       if (status === 'rejected') {
-  categorized.rejected.push(ride);
-} else if (status === 'completed') {
-  categorized.completed.push(ride);
-} else if (status === 'pending') {
-  categorized.pending.push(ride);
-} else if (status === 'joined') {
-  categorized.upcoming.push(ride); // force joined into upcoming
-}
-      });
-
-      setRides(categorized);
-    } catch (error) {
-      console.error('Failed to fetch ride requests:', error);
-    } finally {
-      setLoading(false);
+ const fetchRides = async () => {
+  try {
+    const response = await getCarpoolRequestsByPassenger(passengerId);
+    
+    if (response.success) {
+      setRides(response.data); // response.data contains the categorized rides
+    } else {
+      console.error("API Error:", response.message);
     }
-  };
+  } catch (err) {
+    console.error("Error fetching rides:", err);
+    Alert.alert("Error", "Failed to load rides. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const renderStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
@@ -447,7 +437,7 @@ if (item.allows_luggage) {
 <View style={styles.cardFooter}>
   <View style={{borderBottomWidth: 1,
     borderBottomColor: '#eee',marginBottom:15}}>
-  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10}]}>
+  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10,marginLeft:208}]}>
     Fare (per day): {displayFare}
   </Text>
   </View>

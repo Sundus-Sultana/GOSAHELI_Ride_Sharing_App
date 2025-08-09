@@ -298,17 +298,62 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
 
   console.log("🔍 Received PassengerID:", passengerId); // Debug log
 
-  try {
-    const result = await client.query(
-      `SELECT * FROM "Carpool_Request_Status" WHERE "PassengerID" = $1 ORDER BY "RequestID" DESC`,
-      [passengerId]
-    );
+ try {
+    const query = `
+      SELECT
+        crs."RequestID",
+        crs.date,
+        crs.pickup_location,
+        crs.dropoff_location,
+        crs.pickup_time,
+        crs.dropoff_time,
+        crs.seats,
+        crs.status,
+        crs.route_type,
+        crs.recurring_days,
+        crs.fare,
+        crs.smoking_preference,
+        crs.music_preference,
+        crs.conversation_preference,
+        crs.allows_luggage,
+        d."DriverID",
+        d."UserID" AS driver_user_id,
+        u.username AS driver_name,
+        u.photo_url AS driver_photo,
+        v."VehicleModel",
+        v."PlateNumber",
+        v.color
+      FROM "Carpool_Request_Status" crs
+      INNER JOIN "Driver" d ON crs."DriverID" = d."DriverID"
+      INNER JOIN "User" u ON d."UserID" = u."UserID"
+      LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
+      WHERE crs."PassengerID" = $1
+      ORDER BY crs.date ASC;
+    `;
 
-    console.log("✅ Query result:", result.rows); // Debug log
-    res.status(200).json({ success: true, data: result.rows });
-  } catch (error) {
-    console.error('❌ Error fetching passenger requests:', error.message); // Better error log
-    res.status(500).json({ success: false, message: 'Failed to fetch requests', error: error.message });
+    const { rows } = await client.query(query, [passengerId]);
+
+    const categorized = {
+      pending: [],
+      accepted: [],
+      upcoming: [],
+      completed: [],
+      rejected: []
+    };
+
+    rows.forEach(ride => {
+      const status = (ride.status || '').toLowerCase();
+      if (status === 'accepted') categorized.accepted.push(ride);
+      else if (status === 'joined') categorized.upcoming.push(ride);
+      else if (status === 'completed') categorized.completed.push(ride);
+      else if (status === 'rejected') categorized.rejected.push(ride);
+      else if (status === 'pending') categorized.pending.push(ride);
+    });
+
+    res.status(200).json({ success: true, data: categorized });
+  } catch (err) {
+    console.error("Error fetching all rides:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
