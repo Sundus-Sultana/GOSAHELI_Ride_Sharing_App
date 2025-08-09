@@ -253,7 +253,6 @@ router.post('/create-status-request', async (req, res) => {
 });
 
 // ✅ Delete carpool request 
-// ✅ Delete carpool request 
 router.delete('/delete-status-request/:requestId', async (req, res) => {
   const { requestId } = req.params;
 
@@ -313,6 +312,30 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
   }
 });
 
+// PATCH /api/carpool/update-status/:requestId
+router.patch('/update-status/:requestId', async (req, res) => {
+  const { requestId } = req.params;
+  const { status } = req.body;
+
+  try {
+    const updateQuery = `
+      UPDATE "Carpool_Request_Status"
+      SET status = $1
+      WHERE "RequestID" = $2
+      RETURNING *;
+    `;
+    const result = await client.query(updateQuery, [status, requestId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    res.status(200).json({ success: true, message: `Status updated to ${status}`, data: result.rows[0] });
+  } catch (err) {
+    console.error("Error updating status:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 
 module.exports = router;

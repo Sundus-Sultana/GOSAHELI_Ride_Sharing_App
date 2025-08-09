@@ -19,9 +19,11 @@ export const getUserById = async (userId) => {
 export const getPassengerUserIdFromRequest = async (requestId) => {
   try {
     const res = await axios.get(`${API_URL}/api/become-passenger/user-by-request/${requestId}`);
+    console.log("id,name,photo",res.data.UserID,res.data.photo_url)
     return {
       userId: res.data.userId,
-      username: res.data.username
+      username: res.data.username,
+      photo_url: res.data.photo_url
     };
   } catch (error) {
     console.error('Error getting passenger userId:', error.response?.data || error.message);
@@ -46,3 +48,40 @@ export const getVehicleInfo = async (driverId) => {
   const data = await response.json();
   return data;
 };
+
+
+// ✅ Fetch carpool requests by PassengerID
+export const getCarpoolRequestsByPassenger = async (passengerId) => {
+  try {
+    const res = await axios.get(`${API_URL}/api/carpool/get-status-by-passenger/${passengerId}`);
+    return res.data;
+  } catch (err) {
+    console.error('Error fetching ride requests:', err);
+    throw err;
+  }
+};
+
+
+export const deleteCarpoolRequest = async (requestId) => {
+  try {
+    const res = await axios.delete(`${API_URL}/api/carpool/delete-status-request/${requestId}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error deleting carpool request:', error);
+    throw error;
+  }
+};
+
+
+export const updateCarpoolStatus = async (requestId, status) => {
+  try {
+    const res = await axios.patch(`${API_URL}/api/carpool/update-status/${requestId}`, { status });
+    return res.data;
+  } catch (error) {
+    console.error('Error updating carpool status:', error);
+    throw error;
+  }
+};
+
+
+

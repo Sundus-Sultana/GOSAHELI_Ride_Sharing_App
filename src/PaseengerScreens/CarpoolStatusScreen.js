@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons ,FontAwesome5} from '@expo/vector-icons';
-import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,API_URL } from '../../api';
+import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,updateCarpoolStatus } from '../utils/ApiCalls';
+import { API_URL } from '../../api';
 import moment from 'moment';
 import { useNavigation } from '@react-navigation/native';
 import { getUserById } from '../utils/ApiCalls';
@@ -38,6 +39,87 @@ const navigation = useNavigation();
     fetchAcceptedRides(); // fetch only when selected
   }
 }, [selectedTab]);
+
+useEffect(() => {
+  if (route.params?.tab === 'Accepted') {
+    setActiveTab('Accepted');
+  }
+}, [route.params]);
+
+const handleAccept = (requestId) => {
+  Alert.alert(
+    "Confirm",
+    "Do you want to join this ride?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes",
+        onPress: async () => {
+          try {
+            const res = await updateCarpoolStatus(requestId, "joined");
+            if (res.success) {
+              Alert.alert("Success", "You have joined the ride");
+
+              // ✅ Instant UI update
+              setRides(prev => {
+                const movedRide = prev.accepted.find(r => r.RequestID === requestId);
+                return {
+                  ...prev,
+                  accepted: prev.accepted.filter(r => r.RequestID !== requestId),
+                  upcoming: movedRide ? [...prev.upcoming, { ...movedRide, status: "joined" }] : prev.upcoming
+                };
+              });
+
+              // ⏳ Silent backend refresh
+              setTimeout(fetchRides, 1500);
+            }
+          } catch {
+            Alert.alert("Error", "Failed to join the ride");
+          }
+        }
+      }
+    ]
+  );
+};
+
+
+const handleReject = (requestId) => {
+  Alert.alert(
+    "Confirm",
+    "Do you want to reject this ride?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes",
+        onPress: async () => {
+          try {
+            const res = await updateCarpoolStatus(requestId, "rejected");
+            if (res.success) {
+              Alert.alert("Success", "You have rejected the ride");
+
+              // ✅ Instant UI update
+              setRides(prev => {
+                const movedRide = prev.accepted.find(r => r.RequestID === requestId);
+                return {
+                  ...prev,
+                  accepted: prev.accepted.filter(r => r.RequestID !== requestId),
+                  rejected: movedRide ? [...prev.rejected, { ...movedRide, status: "rejected" }] : prev.rejected
+                };
+              });
+
+              // ⏳ Silent backend refresh
+              setTimeout(fetchRides, 1500);
+            }
+          } catch {
+            Alert.alert("Error", "Failed to reject the ride");
+          }
+        }
+      }
+    ]
+  );
+};
+
+
 
 const handleChatPress = async (requestId, driverUserId, driverName, driverPhoto) => {
   try {
@@ -148,7 +230,7 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
       const categorized = {
         upcoming: [],
         completed: [],
-        cancelled: [],
+       rejected: [],
         pending: [],
         accepted:[]
       };
@@ -159,15 +241,15 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
         const rideDate = new Date(ride.date);
         const status = (ride.status || '').toLowerCase();
 
-        if (status === 'cancelled') {
-          categorized.cancelled.push(ride);
-        } else if (status === 'completed') {
-          categorized.completed.push(ride);
-        } else if (status === 'pending') {
-          categorized.pending.push(ride);
-        } else if (rideDate >= today) {
-          categorized.upcoming.push(ride);
-        }
+       if (status === 'rejected') {
+  categorized.rejected.push(ride);
+} else if (status === 'completed') {
+  categorized.completed.push(ride);
+} else if (status === 'pending') {
+  categorized.pending.push(ride);
+} else if (status === 'joined') {
+  categorized.upcoming.push(ride); // force joined into upcoming
+}
       });
 
       setRides(categorized);
@@ -184,8 +266,8 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
         return <View style={[styles.badge, { backgroundColor: '#4CAF50' }]}><Text style={styles.badgeText}>Confirmed</Text></View>;
       case 'pending':
         return <View style={[styles.badge, { backgroundColor: '#FFC107' }]}><Text style={styles.badgeText}>Pending</Text></View>;
-      case 'cancelled':
-        return <View style={[styles.badge, { backgroundColor: '#f44336' }]}><Text style={styles.badgeText}>Cancelled</Text></View>;
+      case 'rejected':
+        return <View style={[styles.badge, { backgroundColor: '#f44336' }]}><Text style={styles.badgeText}>Rejected</Text></View>;
       default:
         return null;
     }
@@ -306,12 +388,12 @@ if (item.allows_luggage) {
   </View>
 )}
 
- {/* Driver Info - Moved outside footer and styled differently */}
-      {selectedTab === 'accepted' && item.driver_name && (
+{/* Driver Info */}
+{(selectedTab === 'accepted' || selectedTab === 'upcoming' || selectedTab === 'completed') && item.driver_name && (
   <View style={styles.driverInfoContainer}>
     <Image
       source={{ 
-        uri: item.driver_photo.startsWith('/') 
+        uri: item.driver_photo?.startsWith('/') 
           ? `${API_URL}${item.driver_photo}`
           : `${API_URL}/uploads/${item.driver_photo}`
       }}
@@ -327,43 +409,84 @@ if (item.allows_luggage) {
         {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
       </Text>
     </View>
-    <TouchableOpacity
-  onPress={() => handleChatPress(
-    item.RequestID,
-    item.driver_user_id,
-    item.driver_name,
-    item.driver_photo
-  )}
-  style={styles.chatButton}
->
-  <Ionicons name="chatbubble-ellipses-outline" size={24} color={primaryColor} />
-</TouchableOpacity>
+
+    {/* Chat only in accepted & upcoming */}
+    {(selectedTab === 'accepted' || selectedTab === 'upcoming') && (
+      <TouchableOpacity
+        style={{
+          marginTop: 10,
+          padding: 4,
+          paddingRight: 10,
+          borderRadius: 10,
+          alignSelf: 'flex-end',
+          flexDirection: 'row',
+          alignItems: 'center',
+          elevation: 6,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          backgroundColor: '#D64584'
+        }}
+        onPress={() => handleChatPress(
+          item.RequestID,
+          item.driver_user_id,
+          item.driver_name,
+          item.driver_photo
+        )}
+      >
+        <Ionicons name="chatbubble-ellipses-sharp" size={20} color="#ffffff" />
+        <Text style={{ color: '#ffffff', marginLeft: 6, fontWeight: 600 }}>Chat</Text>
+      </TouchableOpacity>
+    )}
   </View>
 )}
 
-          {/* Footer */}
-      <View style={styles.cardFooter}>
-        {item.status?.toLowerCase() !== 'completed' && item.status?.toLowerCase() !== 'cancelled' && (
-          <TouchableOpacity
-            onPress={() => handleDelete(item.RequestID)}
-            style={styles.iconButton}
-            disabled={isDeleting && deletingId === item.RequestID}
-          >
-            {isDeleting && deletingId === item.RequestID ? (
-              <ActivityIndicator size="small" color={primaryColor} />
-            ) : (
-              <Ionicons name="trash-outline" size={20} color={primaryColor} />
-            )}
-          </TouchableOpacity>
-        )}
-        
-        <Text style={[styles.actionButtonText, { color: primaryColor }]}>
-          Fare (per day): {displayFare}
-        </Text>
-      </View>
 
-      
+          {/* Footer */}
+<View style={styles.cardFooter}>
+  <View style={{borderBottomWidth: 1,
+    borderBottomColor: '#eee',marginBottom:15}}>
+  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10}]}>
+    Fare (per day): {displayFare}
+  </Text>
+  </View>
+
+  {selectedTab === 'accepted' && (
+    <View style={styles.acceptRejectContainer}>
+      <TouchableOpacity
+        style={[styles.actionBtn]}
+        onPress={() => handleAccept(item.RequestID)}
+      >
+        <Text style={styles.acceptButtonText}>Join</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.actionBtn]}
+        onPress={() => handleReject(item.RequestID)}
+      >
+        <Text style={styles.rejectButtonText}>Reject</Text>
+      </TouchableOpacity>
     </View>
+  )}
+
+  {selectedTab !== 'accepted' &&
+    item.status?.toLowerCase() !== 'completed' &&
+    item.status?.toLowerCase() !== 'rejected' && (
+      <TouchableOpacity
+        onPress={() => handleDelete(item.RequestID)}
+        disabled={isDeleting && deletingId === item.RequestID}
+      >
+        {isDeleting && deletingId === item.RequestID ? (
+          <ActivityIndicator size="small" color={primaryColor} />
+        ) : (
+          <Ionicons name="trash-outline" size={20} color={primaryColor} />
+        )}
+      </TouchableOpacity>
+    )}
+</View>
+
+</View>
   );
 };
 
@@ -380,7 +503,7 @@ if (item.allows_luggage) {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {['upcoming', 'pending','accepted', 'completed', 'cancelled'].map(tab => (
+        {['pending', 'accepted', 'upcoming', 'completed', 'rejected'].map(tab => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, selectedTab === tab && styles.activeTab]}
@@ -425,9 +548,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '600', color: darkGrey },
   tabRow: {
     flexDirection: 'row', justifyContent: 'space-around', marginTop: 10,
-    borderBottomWidth: 1, borderBottomColor: '#eee'
+    borderBottomWidth: 1, borderBottomColor: '#eee',paddingHorizontal: 8,
   },
-  tab: { paddingVertical: 15, alignItems: 'center', width: '25%' },
+  tab: { paddingVertical: 15, alignItems: 'center', width: '20%',paddingHorizontal: 8, // Reduced from 20
+  minWidth: 70 },
   activeTab: { position: 'relative' },
   tabText: { color: '#666', fontWeight: '500', fontSize: 14 },
   activeTabText: { color: primaryColor, fontWeight: '600' },
@@ -451,12 +575,49 @@ const styles = StyleSheet.create({
   locationLabel: { fontWeight: '600', color: '#666' },
   locationText: { flex: 1, fontSize: 14, color: '#000', flexWrap: 'wrap' },
   timeText: { fontSize: 13, color: '#666' },
-  cardFooter: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginTop: 16
-  },
   iconButton: {
     padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D64584'
+  },
+cardFooter: {
+  marginTop: 16,
+  paddingBottom: 10,
+},
+
+
+acceptRejectContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 8,
+},
+actionBtn: {
+  flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 6,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: primaryColor,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+},
+  acceptButtonText: {
+    color: primaryColor,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  rejectButton: {
+    borderColor: '#aaa',
+    backgroundColor: '#f9f9f9',
+  },
+  rejectButtonText: {
+    color: '#555',
+    fontWeight: '600',
   },
   actionButtonText: { fontWeight: '600', fontSize: 14 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
@@ -468,15 +629,6 @@ const styles = StyleSheet.create({
     borderRadius: 20, marginRight: 6, marginTop: 4
   },
   dayText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    paddingBottom: 10, 
-  },
-  
   driverInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',

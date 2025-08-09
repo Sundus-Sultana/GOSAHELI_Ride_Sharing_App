@@ -83,7 +83,7 @@ router.get('/user-by-request/:requestId', async (req, res) => {
 
     // Finally get username from User table
     const userResult = await client.query(
-      `SELECT "username" FROM "User" 
+      `SELECT "username","photo_url" FROM "User" 
        WHERE "UserID" = $1`,
       [userId]
     );
@@ -94,7 +94,8 @@ router.get('/user-by-request/:requestId', async (req, res) => {
 
     res.json({ 
       userId: userId,
-      username: userResult.rows[0].username 
+      username: userResult.rows[0].username,
+       photo_url: userResult.rows[0].photo_url 
     });
 
   } catch (error) {

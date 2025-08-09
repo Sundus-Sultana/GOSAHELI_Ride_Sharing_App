@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -10,7 +11,7 @@ import {
   Modal,
   Alert,
   Linking,
-  Platform
+  Platform,BackHandler
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
@@ -67,7 +68,21 @@ const Home = ({ route }) => {
     askForPushOnce();
   }, []);
 
+ useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert('Exit App', 'Do you want to exit?', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Exit', onPress: () => BackHandler.exitApp() },
+        ]);
+        return true;
+      };
 
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      return () => subscription.remove(); // ✅ Use `.remove()` instead
+    }, [])
+  );
   
   useEffect(() => {
   const fetchPassengerId = async () => {

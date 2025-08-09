@@ -30,8 +30,11 @@ console.log('API_URL:', API_URL);
   const [loading, setLoading] = useState(true);
   const [matchedRequests, setMatchedRequests] = useState([]);
   const [allPendingRequests, setAllPendingRequests] = useState([]);
+  const [upcomingRequests, setUpcomingRequests] = useState([]);
   const [showMatchedOnly, setShowMatchedOnly] = useState(false);
   const [acceptedRequests, setAcceptedRequests] = useState([]);
+  const [rejectedRequests, setRejectedRequests] = useState([]);
+  const [completedRequests, setCompletedRequests] = useState([]);
   const navigation = useNavigation();
 
 
@@ -56,6 +59,21 @@ if (Platform.OS === 'android') {
     return () => backHandler.remove();
   }, [])
 );
+
+//✅enable polling every 10 seconds
+useEffect(() => {
+  let interval = null;
+
+  if (driverId) {
+    interval = setInterval(() => {
+      fetchRequests();
+    }, 20000); // every 20 seconds
+  }
+
+  return () => clearInterval(interval);
+}, [driverId]);
+
+
 useEffect(() => {
   if (route.params?.tab === 'Accepted') {
     setActiveTab('Accepted');
@@ -127,7 +145,6 @@ const res = await axios.get(`${API_URL}/api/become-passenger/user-by-request/${r
 };
 
 
-
  const deleteChatForRequest = async (requestId) => {
     const chatRoomId = `chat_request_${requestId}`;
     const q = collection(db, chatRoomId);
@@ -180,10 +197,7 @@ const handleAccept = async (requestId) => {
   );
 };
 
-
-
-
-const handleReject = (requestId) => {
+const handleReject = async (requestId) => {
   Alert.alert(
     "Confirm Rejection",
     "Are you sure you want to reject this request?",
@@ -195,10 +209,23 @@ const handleReject = (requestId) => {
       {
         text: "Reject",
         style: "destructive",
-        onPress: () => {
-          // Call your reject API or function here
-          console.log('Rejected:', requestId);
-          ToastAndroid.show('Request Rejected', ToastAndroid.SHORT);
+        onPress: async () => {
+          try {
+            const rejectRes = await axios.post(`${API_URL}/api/driver/carpool/reject-request`, {
+              requestId,
+              driverId
+            });
+
+            if (rejectRes.data.success) {
+              ToastAndroid.show('Request Rejected', ToastAndroid.SHORT);
+              fetchRequests();
+            } else {
+              throw new Error('Failed to update request');
+            }
+          } catch (error) {
+            console.error('Error rejecting request:', error);
+            ToastAndroid.show('Failed to reject request', ToastAndroid.SHORT);
+          }
         }
       }
     ],
@@ -206,8 +233,37 @@ const handleReject = (requestId) => {
   );
 };
 
+const handleEndCarpool = (requestId) => {
+  Alert.alert(
+    "End Carpool",
+    "Are you sure you want to end this carpool?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "End", style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await axios.post(`${API_URL}/api/driver/carpool/end-carpool`, {
+              requestId,
+              driverId
+            });
 
-// In DriverCarpoolStatusScreen.js, update the useEffect:
+            if (res.data.success) {
+              ToastAndroid.show('Carpool ended successfully', ToastAndroid.SHORT);
+              fetchRequests(); // Refresh list
+            } else {
+              ToastAndroid.show('Failed to end carpool', ToastAndroid.SHORT);
+            }
+          } catch (err) {
+            console.error('Error ending carpool:', err);
+            ToastAndroid.show('Error occurred while ending carpool', ToastAndroid.SHORT);
+          }
+        }
+      }
+    ]
+  );
+};
+
 useEffect(() => {
   const registerNotifications = async () => {
     try {
@@ -222,32 +278,45 @@ useEffect(() => {
 
   registerNotifications();
   
-  if (activeTab === 'Requests' && driverId) {
+  if (driverId) {
     fetchRequests();
   }
-}, [activeTab, userId, driverId]);
+}, [userId, driverId]);
 
- // In DriverCarpoolStatusScreen.js, update the fetchRequests function:
-const fetchRequests = async () => {
-  setLoading(true);
-  try {
-    const [matchedRes, pendingRes, acceptedRes] = await Promise.all([
-      axios.get(`${API_URL}/api/driver/carpool/matched-requests-all/${driverId}`),
-      axios.get(`${API_URL}/api/driver/carpool/all-pending-requests`),
-      axios.get(`${API_URL}/api/driver/carpool/accepted-requests/${driverId}`),
-    ]);
+ const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const [
+        matchedRes, 
+        pendingRes, 
+        acceptedRes, 
+        rejectedRes, 
+        upcomingRes, 
+        completedRes
+      ] = await Promise.all([
+        axios.get(`${API_URL}/api/driver/carpool/matched-requests-all/${driverId}`),
+        axios.get(`${API_URL}/api/driver/carpool/all-pending-requests`),
+        axios.get(`${API_URL}/api/driver/carpool/accepted-requests/${driverId}`),
+        axios.get(`${API_URL}/api/driver/carpool/rejected-requests/${driverId}`),
+        axios.get(`${API_URL}/api/driver/carpool/upcoming-requests/${driverId}`),
+        axios.get(`${API_URL}/api/driver/carpool/completed-requests/${driverId}`)
+      ]);
 
-    setMatchedRequests(matchedRes.data?.matched || []);
-    setAllPendingRequests(pendingRes.data?.allPending || []);
-    setAcceptedRequests(acceptedRes.data?.accepted || []);
-  } catch (e) {
-    console.error('Error fetching requests:', e);
-    // Add error handling
-    ToastAndroid.show('Failed to load requests', ToastAndroid.SHORT);
-  } finally {
-    setLoading(false);
-  }
-};
+      setMatchedRequests(matchedRes.data?.matched || []);
+      setAllPendingRequests(pendingRes.data?.allPending || []);
+      setAcceptedRequests(acceptedRes.data?.accepted || []);
+      setRejectedRequests(rejectedRes.data?.rejected || []);
+      console.log('Upcoming API Response:', upcomingRes.data); 
+      setUpcomingRequests(upcomingRes.data?.upcoming || []);
+      setCompletedRequests(completedRes.data?.completed || []);
+
+    } catch (e) {
+      console.error('Error fetching requests:', e);
+      ToastAndroid.show('Failed to load requests', ToastAndroid.SHORT);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderTab = (tabName) => (
     <TouchableOpacity
@@ -280,11 +349,11 @@ const fetchRequests = async () => {
   };
 
 
-const renderRequestCard = (item, key, isMatched = false) => {
+const renderRequestCard = (item, key, isMatched = false, tabContext = 'Requests') => {
   const formattedDate = formatDate(item.date);
   const pickupTime = formatTime(item.pickup_time);
   const dropoffTime = formatTime(item.dropoff_time);
-const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two way"
+  const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two way"
 
   const specialReq = item.special_requests;
   const luggage = item.allows_luggage;
@@ -295,26 +364,34 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
   ].filter(pref => pref.value && pref.value !== 'no-preference');
 
   const renderStatusBadge = (status) => {
-  let backgroundColor = '#999';
-  let label = status?.toUpperCase();
+    let backgroundColor = '#999';
+    let label = status?.toUpperCase();
 
-  if (status === 'accepted') {
-    backgroundColor = '#4CAF50';
-    label = 'ACCEPTED';
-  } else if (status === 'pending') {
-    backgroundColor = isMatched ? '#17A2B8' : '#FFC107';
-    label = isMatched ? 'REQUESTED' : 'PENDING';
-  } else if (status === 'rejected') {
-    backgroundColor = '#F44336';
-    label = 'REJECTED';
-  }
+    switch(status) {
+      case 'accepted':
+        backgroundColor = '#4CAF50';
+        break;
+      case 'joined':
+        backgroundColor = '#4CAF50';
+        break;
+      case 'pending':
+        backgroundColor = isMatched ? '#17A2B8' : '#FFC107';
+        label = isMatched ? 'REQUESTED' : 'PENDING';
+        break;
+      case 'rejected':
+        backgroundColor = '#e00f00ff';
+        break;
+      case 'completed':
+        backgroundColor = '#6c757d';
+        break;
+    }
 
-  return (
-    <View style={[styles.badge, { backgroundColor }]}>
-      <Text style={styles.badgeText}>{label}</Text>
-    </View>
-  );
-};
+    return (
+      <View style={[styles.badge, { backgroundColor }]}>
+        <Text style={styles.badgeText}>{label}</Text>
+      </View>
+    );
+  };
 
   const dayAbbreviations = {
     Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu',
@@ -354,12 +431,10 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
       {/* Route Type */}
       <View style={{ alignItems: 'flex-start', marginVertical: 4 }}>
         <Ionicons
-  name={routeType === 'two way' ? 'swap-vertical' : 'arrow-down'}
-  size={20}
-  color={BlackColor}
-/>
-
-
+          name={routeType === 'two way' ? 'swap-vertical' : 'arrow-down'}
+          size={20}
+          color={BlackColor}
+        />
       </View>
 
       {/* Dropoff */}
@@ -386,38 +461,36 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
       </View>
 
       {/* Preferences */}
-    {preferences.length > 0 && (
-  <View style={styles.preferenceContainer}>
-    {preferences.map((pref, index) => {
-      let IconComponent = Ionicons;
-      let iconName = 'options-outline';
+      {preferences.length > 0 && (
+        <View style={styles.preferenceContainer}>
+          {preferences.map((pref, index) => {
+            let IconComponent = Ionicons;
+            let iconName = 'options-outline';
 
-      if (pref.label === 'Smoking') {
-        IconComponent = MaterialIcons;
-        iconName = 'smoking-rooms';
-      } else if (pref.label === 'Music') {
-        iconName = 'musical-notes-outline';
-      } else if (pref.label === 'Conversation') {
-        iconName = 'chatbubble-ellipses-outline';
-      }
+            if (pref.label === 'Smoking') {
+              IconComponent = MaterialIcons;
+              iconName = 'smoking-rooms';
+            } else if (pref.label === 'Music') {
+              iconName = 'musical-notes-outline';
+            } else if (pref.label === 'Conversation') {
+              iconName = 'chatbubble-ellipses-outline';
+            }
 
-      return (
-        <View key={index} style={styles.preferenceRow}>
-          <IconComponent
-            name={iconName}
-            size={18}
-            color={primaryColor}
-            style={styles.preferenceIcon}
-          />
-          <Text style={styles.preferenceLabel}>{pref.label}:</Text>
-          <Text style={styles.preferenceValue}>{pref.value}</Text>
+            return (
+              <View key={index} style={styles.preferenceRow}>
+                <IconComponent
+                  name={iconName}
+                  size={18}
+                  color={primaryColor}
+                  style={styles.preferenceIcon}
+                />
+                <Text style={styles.preferenceLabel}>{pref.label}:</Text>
+                <Text style={styles.preferenceValue}>{pref.value}</Text>
+              </View>
+            );
+          })}
         </View>
-      );
-    })}
-  </View>
-)}
-
-
+      )}
 
       {/* Luggage */}
       {luggage && (
@@ -444,91 +517,123 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
         </Text>
       </View>
 
+      {/* Chat Button only if accepted or joined */}
+      {(item.status === 'accepted' || item.status === 'joined') && (
+        <TouchableOpacity
+          style={{ marginTop: 10,padding:4, paddingRight:10,borderRadius:10, alignSelf: 'flex-end', 
+            flexDirection: 'row', alignItems: 'center',   elevation: 6, shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 2 },shadowOpacity: 0.1,shadowRadius: 4 ,backgroundColor: '#D64584'}}
+          onPress={() => handleChatPress(item.RequestID)}
+        >
+          <Ionicons name="chatbubble-ellipses-sharp" size={20} color='#ffffff' />
+          <Text style={{ color: '#ffffff', marginLeft: 6 ,fontWeight:600}}>Chat</Text>
+        </TouchableOpacity>
+      )}
+     
+      {/* Tab-specific buttons */}
+      {tabContext === 'Requests' && (
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => handleAccept(item.RequestID)}>
+            <Text style={styles.acceptButtonText}>Accept</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => handleReject(item.RequestID)}
+          >
+            <Text style={styles.rejectButtonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Chat button for accepted requests */}
-     {item.status === 'accepted' && (
-  <TouchableOpacity
-    style={{ marginTop: 10, alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center' }}
-    onPress={() => handleChatPress(item.RequestID)}
-  >
-    <Ionicons name="chatbubble-ellipses-outline" size={20} color={primaryColor} />
-    <Text style={{ color: primaryColor, marginLeft: 6 }}>Chat</Text>
-  </TouchableOpacity>
+      {tabContext === 'Accepted' && (
+        <View style={styles.actionsRow}>
+          {/* Disabled Waiting Button */}
+          <TouchableOpacity style={[styles.actionButton, styles.waitingButton]} disabled>
+            <Text
+              style={styles.waitingButtonText}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >Awaiting Passenger</Text>
+          </TouchableOpacity>
+
+          {/* Active Reject Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => handleReject(item.RequestID)}
+          >
+            <Text style={styles.rejectButtonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+     {tabContext === 'Upcoming' && (
+  <View style={styles.actionsRow}>
+
+
+    <TouchableOpacity
+      style={[styles.actionButton, { borderColor: '#D64584', borderWidth:1,backgroundColor:'#fafafaff', elevation: 4, // for Android
+shadowColor: '#000', // for iOS
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4, }]}
+      onPress={() => handleEndCarpool(item.RequestID)}
+    >
+      <Text style={{ color: '#D64584',fontWeight:'bold' }}>End Carpool</Text>
+    </TouchableOpacity>
+  </View>
 )}
-   
-      {/* Accept / Reject Buttons */}
-<View style={styles.actionsRow}>
-  <TouchableOpacity
-    style={styles.actionButton}
-    activeOpacity={0.8}
-    onPress={() => handleAccept(item.RequestID)}
-  >
-    <Text style={styles.acceptButtonText}>Accept</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={[styles.actionButton, styles.rejectButton]}
-    activeOpacity={0.8}
-    onPress={() => handleReject(item.RequestID)}
-  >
-    <Text style={styles.rejectButtonText}>Reject</Text>
-  </TouchableOpacity>
-</View>
-
-</View>
-
+    </View>
   );
 };
 
+const renderRequests = () => {
+  if (loading) {
+    return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
+  }
 
+  const matchedIds = new Set(matchedRequests.map(req => String(req.RequestID)));
+  const filteredPending = allPendingRequests.filter(
+    req => !matchedIds.has(String(req.RequestID))
+  );
 
-  const renderRequests = () => {
-    if (loading) {
-      return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
-    }
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      {/* Matched Requests */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="checkmark-circle-outline" size={20} color={primaryColor} />
+          <Text style={styles.sectionHeaderText}>
+            Matched Requests ({matchedRequests.length})
+          </Text>
+        </View>
+        {matchedRequests.length === 0 ? (
+          <Text style={styles.emptyText}>No matching requests found.</Text>
+        ) : (
+          matchedRequests.map((req) => renderRequestCard(req, req.RequestID, true))
+        )}
+      </View>
 
-    const matchedIds = new Set(matchedRequests.map(req => String(req.RequestID)));
-    const filteredPending = allPendingRequests.filter(
-      req => !matchedIds.has(String(req.RequestID))
-    );
-
-    return (
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Matched Requests */}
+      {/* Pending Requests */}
+      {!showMatchedOnly && (
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="checkmark-circle-outline" size={20} color={primaryColor} />
+            <Ionicons name="time-outline" size={20} color="#FF8C00" />
             <Text style={styles.sectionHeaderText}>
-              Matched Requests ({matchedRequests.length})
+              Pending Requests ({filteredPending.length})
             </Text>
           </View>
-          {matchedRequests.length === 0 ? (
-            <Text style={styles.emptyText}>No matching requests found.</Text>
+          {filteredPending.length === 0 ? (
+            <Text style={styles.emptyText}>No pending requests.</Text>
           ) : (
-            matchedRequests.map((req) => renderRequestCard(req, req.RequestID, true))
+            filteredPending.map((req) => renderRequestCard(req, req.RequestID, false))
           )}
         </View>
+      )}
+    </ScrollView>
+  );
+};
 
-        {/* Pending Requests */}
-        {!showMatchedOnly && (
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="time-outline" size={20} color="#FF8C00" />
-              <Text style={styles.sectionHeaderText}>
-                Pending Requests ({filteredPending.length})
-              </Text>
-            </View>
-            {filteredPending.length === 0 ? (
-              <Text style={styles.emptyText}>No pending requests.</Text>
-            ) : (
-              filteredPending.map((req) => renderRequestCard(req, req.RequestID, false)))}
-          </View>
-        )}
-      </ScrollView>
-    );
-  };
-
-  const renderAcceptedRequests = () => {
+const renderAcceptedRequests = () => {
   if (loading) {
     return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
   }
@@ -543,26 +648,111 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
         {acceptedRequests.length === 0 ? (
           <Text style={styles.emptyText}>No accepted requests yet.</Text>
         ) : (
-          acceptedRequests.map((req) => renderRequestCard(req, req.RequestID, true))
+          acceptedRequests.map((req) => renderRequestCard(req, req.RequestID, true, 'Accepted'))
         )}
       </View>
     </ScrollView>
   );
 };
 
+const renderUpcomingRequests = () => {
+  if (loading) {
+    return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={primaryColor} barStyle="light-content" />
-      <View style={styles.container}>
-        <View style={styles.tabContainer}>
-          {renderTab('Requests')}
-          {renderTab('Accepted')}
-          {renderTab('Rejected')}
-          {renderTab('Completed')}
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+            <Ionicons name="calendar-outline" size={20} color="#007BFF" />
+            <Text style={styles.sectionHeaderText}>
+              Upcoming Rides ({upcomingRequests.length})
+            </Text>
+          </View>
+          {upcomingRequests.length === 0 ? (
+            <Text style={styles.emptyText}>No upcoming rides yet.</Text>
+          ) : (
+            upcomingRequests.map((req) =>
+              renderRequestCard(req, req.RequestID, false, 'Upcoming')
+            )
+          )}
         </View>
+    </ScrollView>
+  );
+};
 
-        {/* Filter Toggle */}
+const renderRejectedRequests = () => {
+  if (loading) {
+    return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="close-circle-outline" size={20} color="#F44336" />
+          <Text style={styles.sectionHeaderText}>
+            Rejected Requests ({rejectedRequests.length})
+          </Text>
+        </View>
+        {rejectedRequests.length === 0 ? (
+          <Text style={styles.emptyText}>No rejected requests.</Text>
+        ) : (
+          rejectedRequests.map((req) =>
+            renderRequestCard(req, req.RequestID, false, 'Rejected')
+          )
+        )}
+      </View>
+    </ScrollView>
+  );
+};
+
+const renderCompletedRequests = () => {
+  if (loading) {
+    return <ActivityIndicator size="large" color={primaryColor} style={{ marginTop: 50 }} />;
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="checkmark-done-sharp" size={20} color="#6c757d" />
+          <Text style={styles.sectionHeaderText}>
+            Completed Rides ({completedRequests.length})
+          </Text>
+        </View>
+        {completedRequests.length === 0 ? (
+          <Text style={styles.emptyText}>No completed rides yet.</Text>
+        ) : (
+          completedRequests.map((req) =>
+            renderRequestCard(req, req.RequestID, false, 'Completed')
+          )
+        )}
+      </View>
+    </ScrollView>
+  );
+};
+
+return (
+  <SafeAreaView style={styles.safeArea}>
+    <StatusBar backgroundColor={primaryColor} barStyle="light-content" />
+      <View style={styles.header}>
+            <Text style={styles.headerTitle}>My Carpools</Text>
+            <TouchableOpacity>
+              <MaterialIcons name="notifications-none" size={24} color={darkGrey} />
+            </TouchableOpacity>
+          </View>
+    <View style={styles.container}>
+      <View style={styles.tabContainer}>
+        {renderTab('Requests')}
+        {renderTab('Accepted')}
+        {renderTab('Upcoming')}
+        {renderTab('Rejected')}
+        {renderTab('Completed')}
+      </View>
+
+      {/* Filter Toggle - Only show for Requests tab */}
+      {activeTab === 'Requests' && (
         <View style={styles.filterToggleContainer}>
           <TouchableOpacity
             style={[styles.filterToggleButton, !showMatchedOnly && styles.activeFilterButton]}
@@ -587,24 +777,24 @@ const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two wa
             </Text>
           </TouchableOpacity>
         </View>
+      )}
 
-       {activeTab === 'Requests'
-  ? renderRequests()
-  : activeTab === 'Accepted'
-  ? renderAcceptedRequests()
-  : (
-    <View style={styles.placeholder}>
-      <Ionicons name="car-sport-outline" size={50} color={primaryColor} />
-      <Text style={styles.placeholderText}>No {activeTab.toLowerCase()} rides yet.</Text>
+      {activeTab === 'Requests'
+        ? renderRequests()
+        : activeTab === 'Accepted'
+        ? renderAcceptedRequests()
+        : activeTab === 'Upcoming'
+        ? renderUpcomingRequests()
+        : activeTab === 'Rejected'
+        ? renderRejectedRequests()
+        : activeTab === 'Completed'
+        ? renderCompletedRequests()
+        : null}
+
     </View>
-        )}
-      </View>
-    </SafeAreaView>
-  );
+  </SafeAreaView>
+);
 };
-
-
-export default DriverCarpoolStatusScreen;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -615,23 +805,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee'
+  },
+  headerTitle: { fontSize: 22, fontWeight: '600', color: darkGrey },
   tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     borderBottomColor: '#ccc',
     borderBottomWidth: 1,
     marginTop: 10,
+    paddingHorizontal: 8, // Add some padding
   },
   tabButton: {
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 8, // Reduced from 20
+  minWidth: 70, // Ensure minimum width
   },
   activeTab: {
     borderBottomColor: primaryColor,
     borderBottomWidth: 3,
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 14, // Reduced from 16
     color: darkGrey,
     fontWeight: '500',
   },
@@ -649,8 +846,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
   },
-
-
   filterToggleContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -680,7 +875,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-
   sectionBox: {
     backgroundColor: '#fafafa',
     padding: 12,
@@ -699,7 +893,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     backgroundColor: '#f2f2f2',
   },
-
   sectionContainer: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -714,7 +907,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
   },
-
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -723,14 +915,12 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
     paddingBottom: 6,
   },
-
   sectionHeaderText: {
     fontSize: 16,
     fontWeight: '600',
     color: darkGrey,
     marginLeft: 8,
   },
-
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -814,7 +1004,22 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     fontWeight: '600',
-    fontSize: 14
+    fontSize: 14,
+    marginLeft:220
+  },
+  waitingButton: {
+    backgroundColor: '#eeeeeeff',
+    borderColor: '#D64584',
+    borderWidth: 1,
+  },
+  waitingButtonText: {
+    color: '#888',
+  },
+  rejectButton: {
+    backgroundColor: '#FF4D4D',
+  },
+  rejectButtonText: {
+    color: '#FFF',
   },
   dayCircle: {
     backgroundColor: '#ffffff',
@@ -823,88 +1028,78 @@ const styles = StyleSheet.create({
     borderRadius: 20, paddingVertical: 6, paddingHorizontal: 6,
     marginRight: 6,
     marginTop: 4,
-
-    // Glow effect
     shadowColor: primaryColor,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 6,
     elevation: 6,
   },
-
   dayText: {
     color: primaryColor, fontSize: 10
   },
   preferenceContainer: {
-  marginTop: 10,
-  paddingVertical: 6,
-  paddingHorizontal: 8,
-  backgroundColor: '#ffffffff',
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: '#EEE',
-},
-
-preferenceRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginVertical: 4,
-},
-
-preferenceIcon: {
-  marginRight: 6,
-},
-
-preferenceLabel: {
-  fontSize: 13,
-  fontWeight: '600',
-  color: '#444',
-  marginRight: 4,
-},
-
-preferenceValue: {
-  fontSize: 13,
-  fontWeight: '500',
-  color: '#666',
-  flexShrink: 1,
-},
-actionsRow: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  marginTop: 16,
-},
-
-actionButton: {
-  flex: 1,
-  paddingVertical: 10,
-  marginHorizontal: 6,
-  borderRadius: 22,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: primaryColor,
-  backgroundColor: '#fff',
-  elevation: 2,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 2,
-},
-
-acceptButtonText: {
-  color: primaryColor,
-  fontWeight: '600',
-},
-
-rejectButton: {
-  borderColor: '#aaa',
-  backgroundColor: '#f9f9f9',
-},
-
-rejectButtonText: {
-  color: '#555',
-  fontWeight: '600',
-},
-
-
-
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#ffffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  preferenceIcon: {
+    marginRight: 6,
+  },
+  preferenceLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#444',
+    marginRight: 4,
+  },
+  preferenceValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+    flexShrink: 1,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 6,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: primaryColor,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  acceptButtonText: {
+    color: primaryColor,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  rejectButton: {
+    borderColor: '#aaa',
+    backgroundColor: '#f9f9f9',
+  },
+  rejectButtonText: {
+    color: '#555',
+    fontWeight: '600',
+  },
 });
+export default DriverCarpoolStatusScreen;

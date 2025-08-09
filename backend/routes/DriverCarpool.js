@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const client = require('../db');
 
-// routes/DriverCarpool.js
-
+// Create a new carpool offer
 router.post('/offer', async (req, res) => {
   const {
     UserID,
@@ -43,9 +42,7 @@ router.post('/offer', async (req, res) => {
   }
 });
 
-
-// GET /matched-requests-all/:driverId
-// GET /matched-requests-all/:driverId
+// Get all matched requests for a driver
 router.get('/matched-requests-all/:driverId', async (req, res) => {
   const { driverId } = req.params;
 
@@ -95,8 +92,7 @@ router.get('/matched-requests-all/:driverId', async (req, res) => {
   }
 });
 
-
-// GET /all-pending-requests
+// Get all pending requests
 router.get('/all-pending-requests', async (_req, res) => {
   try {
     const result = await client.query(`
@@ -113,13 +109,11 @@ router.get('/all-pending-requests', async (_req, res) => {
   }
 });
 
-
-// Add this route to DriverCarpool.js
+// Accept a carpool request
 router.post('/accept-request', async (req, res) => {
   const { requestId, driverId } = req.body;
   
   try {
-    // Update the request status and set driver ID and acceptance time
     const result = await client.query(
       `UPDATE "Carpool_Request_Status" 
        SET status = 'accepted',
@@ -141,14 +135,65 @@ router.post('/accept-request', async (req, res) => {
   }
 });
 
-// GET /accepted-requests/:driverId
+// Reject a carpool request
+router.post('/reject-request', async (req, res) => {
+  const { requestId, driverId } = req.body;
+  
+  try {
+    const result = await client.query(
+      `UPDATE "Carpool_Request_Status" 
+       SET status = 'rejected',
+           "DriverID" = $1,
+           rejected_time = NOW()
+       WHERE "RequestID" = $2
+       RETURNING *`,
+      [driverId, requestId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    res.json({ success: true, request: result.rows[0] });
+  } catch (err) {
+    console.error('Error rejecting request:', err);
+    res.status(500).json({ error: 'Failed to reject request' });
+  }
+});
+
+// End a carpool (mark as completed)
+router.post('/end-carpool', async (req, res) => {
+  const { requestId, driverId } = req.body;
+  
+  try {
+    const result = await client.query(
+      `UPDATE "Carpool_Request_Status" 
+       SET status = 'completed',
+           completed_time = NOW()
+       WHERE "RequestID" = $1 AND "DriverID" = $2
+       RETURNING *`,
+      [requestId, driverId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found or not authorized' });
+    }
+
+    res.json({ success: true, request: result.rows[0] });
+  } catch (err) {
+    console.error('Error ending carpool:', err);
+    res.status(500).json({ error: 'Failed to end carpool' });
+  }
+});
+
+// Get all accepted requests for a driver
 router.get('/accepted-requests/:driverId', async (req, res) => {
   const { driverId } = req.params;
 
   try {
     const result = await client.query(
       `SELECT * FROM "Carpool_Request_Status"
-       WHERE status = 'accepted' AND "DriverID" = $1
+       WHERE  "status" = 'accepted' AND "DriverID" = $1
        ORDER BY "accepted_time" DESC`,
       [driverId]
     );
@@ -160,5 +205,71 @@ router.get('/accepted-requests/:driverId', async (req, res) => {
   }
 });
 
-// Export at the end
+// Get all upcoming (joined) requests for a driver
+router.get('/upcoming-requests/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+  
+  try {
+    console.log(`Fetching upcoming rides for driver ${driverId}`); // Add this
+    
+   const result = await client.query(
+  `SELECT * FROM "Carpool_Request_Status"
+   WHERE TRIM("status") = 'joined'
+   AND "DriverID" = $1
+   AND date >= (CURRENT_DATE AT TIME ZONE 'UTC')::date
+   ORDER BY date ASC`,
+  [driverId]
+);
+    
+    console.log(`Found ${result.rows.length} upcoming rides`); // Add this
+    console.log('Sample record:', result.rows[0]); // Add this
+
+    res.json({ upcoming: result.rows });
+  } catch (err) {
+    console.error('Database error:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch upcoming requests',
+      details: err.message 
+    });
+  }
+});
+
+// Get all rejected requests for a driver
+router.get('/rejected-requests/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+
+  try {
+    const result = await client.query(
+      `SELECT * FROM "Carpool_Request_Status"
+       WHERE "status" = 'rejected' AND "DriverID" = $1
+       ORDER BY "rejected_time" DESC`,
+      [driverId]
+    );
+
+    res.json({ rejected: result.rows });
+  } catch (err) {
+    console.error('Error fetching rejected requests:', err);
+    res.status(500).json({ error: 'Failed to fetch rejected requests' });
+  }
+});
+
+// Get all completed requests for a driver
+router.get('/completed-requests/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+
+  try {
+    const result = await client.query(
+      `SELECT * FROM "Carpool_Request_Status"
+       WHERE "status" = 'completed' AND "DriverID" = $1
+       ORDER BY "completed_time" DESC`,
+      [driverId]
+    );
+
+    res.json({ completed: result.rows });
+  } catch (err) {
+    console.error('Error fetching completed requests:', err);
+    res.status(500).json({ error: 'Failed to fetch completed requests' });
+  }
+});
+
 module.exports = router;

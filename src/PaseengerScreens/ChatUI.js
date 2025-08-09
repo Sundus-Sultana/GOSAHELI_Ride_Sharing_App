@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, TextInput, TouchableOpacity, Text, Alert,Image,
-  FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,BackHandler
+  View, TextInput, TouchableOpacity, Text, Alert, Image,
+  FlatList, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, BackHandler
 } from 'react-native';
 import { db } from '../firebase/setup.js';
 import { useNavigation } from '@react-navigation/native';
@@ -21,17 +21,17 @@ import { Ionicons } from '@expo/vector-icons'; // or 'react-native-vector-icons/
 
 
 export default function ChatScreen({ route }) {
- const {
-  driverId ,userId,
-  chatRoomId,
-  currentUser,
-  currentUserId,
-  currentUserName,
-  receiverUserId,
-  receiverUserName,
-  receiverUserPhoto,
-  currentUserPhoto,
-} = route.params;
+  const {
+    driverId, userId,
+    chatRoomId,
+    currentUser,
+    currentUserId,
+    currentUserName,
+    receiverUserId,
+    receiverUserName,
+    receiverUserPhoto,
+    currentUserPhoto,
+  } = route.params;
 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
@@ -40,73 +40,73 @@ export default function ChatScreen({ route }) {
   const flatListRef = useRef(null);
   const navigation = useNavigation();
 
-    const senderPhotos = {
+  const senderPhotos = {
     [currentUserId]: currentUserPhoto,
     [receiverUserId]: receiverUserPhoto,
   };
 
- useFocusEffect(
-  React.useCallback(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      navigation.goBack();
-      return true;
-    });
-
-    return () => backHandler.remove();
-  }, [])
-);
-
-
- useEffect(() => {
-  const q = query(collection(db, chatRoomId), orderBy('createdAt', 'asc'));
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const grouped = [];
-      let lastDate = null;
-
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const timestamp = data.createdAt?.toDate?.();
-
-        if (timestamp) {
-          const dateStr = new Intl.DateTimeFormat('en-PK', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            timeZone: 'Asia/Karachi',
-          }).format(timestamp);
-
-          if (dateStr !== lastDate) {
-            grouped.push({ type: 'date', date: dateStr, id: `date-${dateStr}` });
-            lastDate = dateStr;
-          }
-        }
-
-        grouped.push({
-          id: doc.id,
-          ...data,
-          createdAt: timestamp || new Date(),
-          type: 'message',
-        });
+  useFocusEffect(
+    React.useCallback(() => {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        navigation.goBack();
+        return true;
       });
 
-      setMessages(grouped);
-      setLoading(false);
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    },
-    (error) => {
-      console.error('Error loading messages:', error);
-      setLoading(false);
-      Alert.alert('Error', 'Could not load messages. Please check your connection.');
-    }
+      return () => backHandler.remove();
+    }, [])
   );
 
-  return () => unsubscribe();
-}, [chatRoomId]);
+
+  useEffect(() => {
+    const q = query(collection(db, chatRoomId), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const grouped = [];
+        let lastDate = null;
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const timestamp = data.createdAt?.toDate?.();
+
+          if (timestamp) {
+            const dateStr = new Intl.DateTimeFormat('en-PK', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              timeZone: 'Asia/Karachi',
+            }).format(timestamp);
+
+            if (dateStr !== lastDate) {
+              grouped.push({ type: 'date', date: dateStr, id: `date-${dateStr}` });
+              lastDate = dateStr;
+            }
+          }
+
+          grouped.push({
+            id: doc.id,
+            ...data,
+            createdAt: timestamp || new Date(),
+            type: 'message',
+          });
+        });
+
+        setMessages(grouped);
+        setLoading(false);
+
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      },
+      (error) => {
+        console.error('Error loading messages:', error);
+        setLoading(false);
+        Alert.alert('Error', 'Could not load messages. Please check your connection.');
+      }
+    );
+
+    return () => unsubscribe();
+  }, [chatRoomId]);
 
 
   const sendMessage = async () => {
@@ -130,47 +130,47 @@ export default function ChatScreen({ route }) {
 
   const renderItem = ({ item }) => {
     if (item.type === 'date') {
-    return (
-      <View style={styles.dateHeaderContainer}>
-        <Text style={styles.dateHeaderText}>{item.date}</Text>
-      </View>
-    );
-  }
+      return (
+        <View style={styles.dateHeaderContainer}>
+          <Text style={styles.dateHeaderText}>{item.date}</Text>
+        </View>
+      );
+    }
 
-  const isMe = item.senderId === currentUserId;
-  const displayTime = new Intl.DateTimeFormat('en-PK', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Karachi',
-  }).format(item.createdAt);
-      const profileImageUri = senderPhotos[item.senderId]
-  ? senderPhotos[item.senderId].startsWith('/')
-    ? `${API_URL}${senderPhotos[item.senderId]}`
-    : `${API_URL}/uploads/${senderPhotos[item.senderId]}`
-  : null;
+    const isMe = item.senderId === currentUserId;
+    const displayTime = new Intl.DateTimeFormat('en-PK', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Karachi',
+    }).format(item.createdAt);
+    const profileImageUri = senderPhotos[item.senderId]
+      ? senderPhotos[item.senderId].startsWith('/')
+        ? `${API_URL}${senderPhotos[item.senderId]}`
+        : `${API_URL}/uploads/${senderPhotos[item.senderId]}`
+      : null;
 
     return (
-       <View style={[styles.messageContainer, isMe ? styles.rightAlign : styles.leftAlign]}>
-    {!isMe && (
-      <View style={styles.avatar}>
-        {profileImageUri ? (
-          <Image source={{ uri: profileImageUri }} style={styles.avatarImage} />
-        ) : (
-          <Text style={styles.avatarText}>{item.sender[0].toUpperCase()}</Text>
+      <View style={[styles.messageContainer, isMe ? styles.rightAlign : styles.leftAlign]}>
+        {!isMe && (
+          <View style={styles.avatar}>
+            {profileImageUri ? (
+              <Image source={{ uri: profileImageUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{item.sender[0].toUpperCase()}</Text>
+            )}
+          </View>
         )}
+        <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+          {!isMe && <Text style={styles.senderLabel}>{item.sender}</Text>}
+          <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
+            {item.text}
+          </Text>
+          <Text style={[styles.timestamp, isMe ? styles.myTimeText : styles.otherTimeText]}>
+            {displayTime}
+          </Text>
+        </View>
       </View>
-    )}
-    <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-      {!isMe && <Text style={styles.senderLabel}>{item.sender}</Text>}
-      <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
-        {item.text}
-      </Text>
-    <Text style={[styles.timestamp, isMe ? styles.myTimeText : styles.otherTimeText]}>
-  {displayTime}
-</Text>
-    </View>
-  </View>
     );
   };
 
@@ -182,31 +182,32 @@ export default function ChatScreen({ route }) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={90}
       >
-  <View style={styles.header}>
-  <View style={styles.headerContent}>
-    <TouchableOpacity
-      onPress={() => navigation.goBack()}
-      style={styles.backButton}
-    >
-      <Ionicons name="arrow-back" size={24} color="white" />
-    </TouchableOpacity>
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
 
-   <Image
-  source={
-    receiverUserPhoto
-      ? { uri: receiverUserPhoto.startsWith('/') 
-          ? `${API_URL}${receiverUserPhoto}`
-          : `${API_URL}/uploads/${receiverUserPhoto}`
-        }
-      : require('../../assets/empty_avatar.jpg')
-  }
-  style={styles.headerAvatarImage}
-  onError={(e) => console.log("Header image error:", e.nativeEvent.error)}
-/>
+            <Image
+              source={
+                receiverUserPhoto
+                  ? {
+                    uri: receiverUserPhoto.startsWith('/')
+                      ? `${API_URL}${receiverUserPhoto}`
+                      : `${API_URL}/uploads/${receiverUserPhoto}`
+                  }
+                  : require('../../assets/empty_avatar.jpg')
+              }
+              style={styles.headerAvatarImage}
+              onError={(e) => console.log("Header image error:", e.nativeEvent.error)}
+            />
 
-    <Text style={styles.headerText}>{receiverUserName}</Text>
-  </View>
-</View>
+            <Text style={styles.headerText}>{receiverUserName}</Text>
+          </View>
+        </View>
 
 
         {loading ? (
@@ -259,22 +260,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
- header: {
-  backgroundColor: '#d63384',
-  paddingVertical: 12,
-  paddingHorizontal: 16,
-  elevation: 4,
-},
+  header: {
+    backgroundColor: '#d63384',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    elevation: 4,
+  },
 
-headerContent: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerText: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  color: '#fff',
-},
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
   inputRow: {
     flexDirection: 'row',
     padding: 8,
@@ -331,18 +332,18 @@ headerContent: {
     alignSelf: 'flex-start',
   },
   dateHeaderContainer: {
-  alignItems: 'center',
-  marginVertical: 8,
-},
+    alignItems: 'center',
+    marginVertical: 8,
+  },
 
-dateHeaderText: {
-  backgroundColor: '#e0e0e0',
-  color: '#555',
-  fontSize: 12,
-  paddingVertical: 4,
-  paddingHorizontal: 10,
-  borderRadius: 10,
-},
+  dateHeaderText: {
+    backgroundColor: '#e0e0e0',
+    color: '#555',
+    fontSize: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
 
 
   bubble: {
@@ -363,7 +364,7 @@ dateHeaderText: {
     backgroundColor: '#f8f8f8',
     borderBottomLeftRadius: 0,
   },
- // Add new text color styles
+  // Add new text color styles
   myMessageText: {
     color: '#fff',
     fontSize: 15,
@@ -385,23 +386,23 @@ dateHeaderText: {
     marginTop: 4,
   },
   myTimeText: {
-  color: '#f6f5f5ff', // white for sender time
-},
+    color: '#f6f5f5ff', // white for sender time
+  },
 
-otherTimeText: {
-  color: '#545151ff', // grey or customize for receiver time
-},
- backButton: {
-  marginRight: 10,
-},
+  otherTimeText: {
+    color: '#545151ff', // grey or customize for receiver time
+  },
+  backButton: {
+    marginRight: 10,
+  },
 
- // Update avatar styles
+  // Update avatar styles
   avatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    borderColor:'#d63384',
-    borderWidth:1,
+    borderColor: '#d63384',
+    borderWidth: 1,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
@@ -421,29 +422,31 @@ otherTimeText: {
   headerAvatarImage: {
     width: 40,
     height: 40,
+    borderColor: '#ffffff',
+    borderWidth: 0.5,
     borderRadius: 20,
     marginRight: 10,
   },
 
-senderProfileRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginTop: 4,
-  marginLeft: 4,
-},
+  senderProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginLeft: 4,
+  },
 
-profilePhotoUnderMessage: {
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  marginRight: 6,
-  backgroundColor: '#ccc',
-},
+  profilePhotoUnderMessage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 6,
+    backgroundColor: '#ccc',
+  },
 
-profileNameUnderMessage: {
-  fontSize: 12,
-  color: '#666',
-}
+  profileNameUnderMessage: {
+    fontSize: 12,
+    color: '#666',
+  }
 
 
 });
