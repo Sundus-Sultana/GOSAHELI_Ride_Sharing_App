@@ -324,7 +324,7 @@ useEffect(() => {
         </Swiper>
       </View>
 
-      {/* Search Bar */}
+      {/* Search Bar 
       <View style={styles.searchContainer}>
         <MaterialIcons name="search" size={20} color="#d63384" />
         <TextInput
@@ -332,7 +332,7 @@ useEffect(() => {
           placeholderTextColor="#888"
           style={styles.searchInput}
         />
-      </View>
+      </View>*/}
 
       {/* Transport & Delivery Toggle */}
       <View style={styles.toggleContainer}>

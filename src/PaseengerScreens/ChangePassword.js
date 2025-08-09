@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons} from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import axios from 'axios';
@@ -230,7 +230,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16
-  }
+  },
+  submitRatingButton: {
+  marginLeft: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 4,
+  backgroundColor:'#d63384',
+  borderRadius: 12,
+},
+submitRatingText: {
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: '600',
+},
 });
 
 export default ChangePassword;

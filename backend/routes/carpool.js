@@ -382,5 +382,53 @@ router.patch('/update-status/:requestId', async (req, res) => {
   }
 });
 
+// POST /api/favourites
+router.post('/favourites', async (req, res) => {
+  const { PassengerID, DriverID } = req.body;
+  try {
+    await pool.query(`
+      INSERT INTO "Favourites" ("PassengerID", "DriverID")
+      VALUES ($1, $2)
+      ON CONFLICT ("PassengerID", "DriverID") DO NOTHING
+    `, [PassengerID, DriverID]);
+    res.json({ success: true, message: "Driver favourited" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Error adding favourite" });
+  }
+});
+
+// DELETE /api/favourites/:passengerId/:driverId
+router.delete('/favourites/:passengerId/:driverId', async (req, res) => {
+  const { passengerId, driverId } = req.params;
+  try {
+    await pool.query(`
+      DELETE FROM "Favourites" WHERE "PassengerID"=$1 AND "DriverID"=$2
+    `, [passengerId, driverId]);
+    res.json({ success: true, message: "Driver removed from favourites" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Error removing favourite" });
+  }
+});
+
+// POST /api/feedback
+router.post('/feedback', async (req, res) => {
+  const { RateValue, DriverID, PassengerID, Message } = req.body;
+  try {
+    await pool.query(`
+      INSERT INTO "Feedback" ("RateValue", "DriverID", "PassengerID", "Message")
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT ("DriverID", "PassengerID") 
+      DO UPDATE SET "RateValue"=EXCLUDED."RateValue", "Message"=EXCLUDED."Message"
+    `, [RateValue, DriverID, PassengerID, Message]);
+    res.json({ success: true, message: "Feedback submitted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Error submitting feedback" });
+  }
+});
+
+
 
 module.exports = router;

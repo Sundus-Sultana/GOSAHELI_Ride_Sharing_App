@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-   ScrollView
+  ScrollView
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { API_URL,getUserById } from '../../api'; // Adjust path as needed
+import { API_URL, getUserById } from '../../api'; // Adjust path as needed
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,18 +18,18 @@ const SettingsScreen = ({ navigation, route }) => {
   const [userData, setUserData] = useState(null);
 
   // Fetch user data when this screen is focused
-useFocusEffect(
-  React.useCallback(() => {
-    const onBackPress = () => {
-      navigation.navigate('Profile', { userId });
-      return true; // Prevent default behavior
-    };
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('Profile', { userId });
+        return true; // Prevent default behavior
+      };
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-    return () => subscription.remove(); // Cleanup
-  }, [navigation, userId])
-);
+      return () => subscription.remove(); // Cleanup
+    }, [navigation, userId])
+  );
 
 
   return (
@@ -40,8 +40,8 @@ useFocusEffect(
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId })}>
-  <Ionicons name="arrow-back" size={24} color="#fff" />
-</TouchableOpacity>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Settings</Text>
           <View style={{ width: 24 }} /> {/* for alignment like Profile */}
         </View>
@@ -56,16 +56,16 @@ useFocusEffect(
             <Text style={styles.optionText}>Change Password</Text>
             <MaterialIcons name="chevron-right" size={24} color="#888" />
           </TouchableOpacity>
-
-<TouchableOpacity
+{/*
+          <TouchableOpacity
             style={styles.optionItem}
-             onPress={() => alert('Notification settings coming soon')}
+            onPress={() => alert('Notification settings coming soon')}
           >
             <MaterialIcons name="lock" size={24} color="#d63384" />
             <Text style={styles.optionText}>Settings</Text>
             <MaterialIcons name="chevron-right" size={24} color="#888" />
-          </TouchableOpacity>
-        
+          </TouchableOpacity>*/}
+
           {/* Add more settings items here as needed */}
         </ScrollView>
       </View>

@@ -76,6 +76,26 @@ const Profile = ({ navigation, route }) => {
   }, [userId])
 );
 
+const handleLogout = async () => {
+    Alert.alert('Confirm Logout', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        onPress: async () => {
+          try {
+            await auth.signOut();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'LandingActivity' }],
+            });
+          } catch (error) {
+            console.error('Logout error:', error);
+            Alert.alert('Error', 'Could not sign out. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
 
   const handleEdit = () => {
     setIsEditing(!isEditing);
@@ -273,7 +293,7 @@ const Profile = ({ navigation, route }) => {
           {/* Placeholder options */}
           <View style={styles.optionsContainer}>
             {[
-              ['payment', 'Payment Methods'],
+             
               ['settings', 'Settings'],
               ['help', 'Help Center'],
             ].map(([icon, label]) => (
@@ -283,6 +303,9 @@ const Profile = ({ navigation, route }) => {
   onPress={() => {
     if (label === 'Settings') {
       navigation.navigate('SettingsScreen', { userId });
+    } 
+     else if (label === 'Help Center') {
+      navigation.navigate('Support', { userId });
     } else {
       Alert.alert('Coming Soon', `${label} screen is not implemented yet.`);
     }
@@ -299,7 +322,7 @@ const Profile = ({ navigation, route }) => {
           {/* Logout */}
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={() => auth.signOut().then(() => navigation.replace('Login'))}
+           onPress={handleLogout}
           >
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>

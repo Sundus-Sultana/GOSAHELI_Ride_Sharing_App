@@ -235,11 +235,11 @@ useEffect(() => {
           </Swiper>
         </View>
 
-        {/* Search */}
+        {/* Search 
         <View style={styles.searchContainer}>
           <MaterialIcons name="search" size={20} color="#d63384" />
           <TextInput placeholder="Where would you go?" placeholderTextColor="#888" style={styles.searchInput} />
-        </View>
+        </View>*/}
 
         {/* Toggle Buttons */}
         <View style={styles.toggleContainer}>
@@ -297,7 +297,7 @@ useEffect(() => {
           )}
 
           <FlatList
-            data={rideHistory.slice(0, 2)}
+            data={rideHistory.slice(0, 3)}
             keyExtractor={(item) => item.ride_history_id.toString()}
             renderItem={({ item }) => (
               <View style={styles.historyCard}>

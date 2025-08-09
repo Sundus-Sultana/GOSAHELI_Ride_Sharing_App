@@ -41,16 +41,6 @@ const navigation = useNavigation();
 }, [selectedTab]);
 
 useEffect(() => {
-  let interval = null;
-  if (passengerId) {
-    interval = setInterval(() => {
-      fetchRides();
-    }, 20000); // every 20 seconds
-  }
-  return () => clearInterval(interval);
-}, [passengerId]);
-
-useEffect(() => {
   if (route.params?.tab === 'Accepted') {
     setActiveTab('Accepted');
   }
@@ -232,7 +222,7 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
 };
 
 
- const fetchRides = async () => {
+  const fetchRides = async () => {
   try {
     const response = await getCarpoolRequestsByPassenger(passengerId);
     
@@ -249,7 +239,6 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
   }
 };
 
-
   const renderStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'confirmed':
@@ -257,7 +246,7 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
       case 'pending':
         return <View style={[styles.badge, { backgroundColor: '#FFC107' }]}><Text style={styles.badgeText}>Pending</Text></View>;
       case 'rejected':
-        return <View style={[styles.badge, { backgroundColor: '#f44336' }]}><Text style={styles.badgeText}>Rejected</Text></View>;
+        return <View style={[styles.badge, { backgroundColor: '#e00f00ff' }]}><Text style={styles.badgeText}>Rejected</Text></View>;
       default:
         return null;
     }
@@ -437,7 +426,7 @@ if (item.allows_luggage) {
 <View style={styles.cardFooter}>
   <View style={{borderBottomWidth: 1,
     borderBottomColor: '#eee',marginBottom:15}}>
-  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10,marginLeft:208}]}>
+  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10}]}>
     Fare (per day): {displayFare}
   </Text>
   </View>

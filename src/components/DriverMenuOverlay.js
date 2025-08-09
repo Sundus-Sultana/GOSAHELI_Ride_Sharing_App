@@ -190,11 +190,12 @@ const userRes = await getUserById(userId);
                 </View>
               ) : (
                 <>
+                {/*wallet
                   <TouchableOpacity style={styles.menuItem} onPress={() => {
                     closeModal(); navigation.navigate('Wallet');
                   }}>
                     <Text style={styles.menuText}>Wallet</Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity>*/}
 
                <TouchableOpacity
   style={styles.menuItem}

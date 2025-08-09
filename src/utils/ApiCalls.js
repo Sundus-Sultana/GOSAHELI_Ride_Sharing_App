@@ -84,4 +84,28 @@ export const updateCarpoolStatus = async (requestId, status) => {
 };
 
 
+export const addFavourite = async (PassengerID, DriverID) => {
+  const res = await fetch(`${API_URL}/api/favourites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ PassengerID, DriverID })
+  });
+  return res.json();
+};
+
+export const removeFavourite = async (PassengerID, DriverID) => {
+  const res = await fetch(`${API_URL}/api/favourites/${PassengerID}/${DriverID}`, {
+    method: 'DELETE'
+  });
+  return res.json();
+};
+
+export const submitFeedback = async (feedbackData) => {
+  const res = await fetch(`${API_URL}/api/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(feedbackData)
+  });
+  return res.json();
+};
 
