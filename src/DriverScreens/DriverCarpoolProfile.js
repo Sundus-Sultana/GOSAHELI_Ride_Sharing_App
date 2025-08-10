@@ -60,6 +60,7 @@ const DriverCarpoolProfile = ({ route }) => {
       }));
     }
   }, [route.params]);
+  
 
   const formatTime = (date) => {
     let hours = date.getHours();
@@ -178,7 +179,11 @@ const DriverCarpoolProfile = ({ route }) => {
               style={styles.locationInput}
               value={request.pickup}
               placeholder="Pickup location"
-              editable={false}
+               editable={false}
+                selectTextOnFocus={false}
+                multiline={true}
+                numberOfLines={2}
+                textAlignVertical="top"
             />
             <TouchableOpacity onPress={() => showPicker('pickup')}>
               <Text style={styles.timeText}>{formatTime(pickupTime)}</Text>
@@ -200,7 +205,11 @@ const DriverCarpoolProfile = ({ route }) => {
               style={styles.locationInput}
               value={request.dropoff}
               placeholder="Dropoff location"
-              editable={false}
+               editable={false}
+                selectTextOnFocus={false}
+                multiline={true}
+                numberOfLines={2}
+                textAlignVertical="top"
             />
             {routeType === 'Two Way' && (
               <TouchableOpacity onPress={() => showPicker('dropoff')}>

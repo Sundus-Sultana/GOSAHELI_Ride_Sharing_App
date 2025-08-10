@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', elevation: 4
   },
   distance: { fontSize: 17, marginBottom: 5 },
-  bookBtn: { backgroundColor: '#28a745', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center' },
+  bookBtn: { backgroundColor: '#D64584', padding: 12, borderRadius: 8, width: '100%', alignItems: 'center' },
   bookText: { color: '#fff', fontWeight: 'bold' }
 });
 

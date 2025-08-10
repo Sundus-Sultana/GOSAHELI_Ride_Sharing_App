@@ -189,8 +189,8 @@ app.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('🔥 Login Error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    console.error('🔥 Unexpected Login Error:', error);
+    res.status(500).json({ message: 'Something went wrong. Please try again later.' });
   }
 });
 

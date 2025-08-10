@@ -85,7 +85,13 @@ useFocusEffect(
   }
 
   const userId = loginResponse.data.user.UserID;
-  console.log('✅ UserID from login:', userId);
+ const dbUsername = loginResponse.data.user.username;
+const dbEmail = loginResponse.data.user.email;
+
+console.log('✅ UserID from login:', userId);
+console.log(`✅ Logged-in successful. UserID: ${userId}, Name: ${dbUsername}, Email: ${dbEmail}`)
+
+
 
   const userData = await getUserById(userId);
   if (!userData) throw new Error('User record not found');
@@ -116,17 +122,28 @@ useFocusEffect(
         Alert.alert('Error', 'User role not set properly. Please contact support.');
       }
     } catch (error) {
-      console.error('Login Error:', error);
-      let errorMessage = 'Login failed. Please try again.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message.includes('User record')) {
-        errorMessage = 'Account not properly registered';
-      }
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setIsLoading(false);
+  if (error.response) {
+    console.warn('Login failed:', error.response.status, error.response.data?.message);
+  } else if (error.request) {
+    console.warn('No response received:', error.request);
+  } else {
+    console.warn('Unexpected error:', error.message);
+  }
+
+  if (error.response) {
+    if (error.response.status === 401) {
+      Alert.alert('Invalid Login', 'Invalid email or password.');
+    } else {
+      Alert.alert('Error', error.response.data?.message || 'Something went wrong. Please try again later.');
     }
+  } else if (error.request) {
+    Alert.alert('Network Error', 'Cannot connect to the server. Please check your internet connection.');
+  } else {
+    Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+  }
+} finally {
+  setIsLoading(false); // ✅ Only in frontend
+}
   };
 
 

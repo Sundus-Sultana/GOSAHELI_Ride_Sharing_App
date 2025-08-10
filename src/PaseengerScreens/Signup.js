@@ -36,13 +36,13 @@ export default function Registration({ navigation }) {
         navigation.navigate('LandingActivity'); // ← Replace with your actual screen
         return true;
       };
-  
+
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-  
+
       return () => subscription.remove();
     }, [])
   );
-  
+
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -91,65 +91,65 @@ export default function Registration({ navigation }) {
   };
 
   const registerUser = async () => {
-  setIsLoading(true);
+    setIsLoading(true);
 
-  const trimmedEmail = email.trim();
-  const trimmedUsername = username.trim();
-  const trimmedPassword = password.trim();
-  const trimmedConfirmPassword = confirmPassword.trim();
-  const trimmedPhone = phoneNo.trim();
+    const trimmedEmail = email.trim();
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+    const trimmedPhone = phoneNo.trim();
 
-  const emailError = validateEmail(trimmedEmail);
-  const usernameError = validateUsername(trimmedUsername);
-  const passwordError = validatePassword(trimmedPassword);
-  const confirmPasswordError = validateConfirmPassword(trimmedConfirmPassword);
-  const phoneError = validatePhone(trimmedPhone);
+    const emailError = validateEmail(trimmedEmail);
+    const usernameError = validateUsername(trimmedUsername);
+    const passwordError = validatePassword(trimmedPassword);
+    const confirmPasswordError = validateConfirmPassword(trimmedConfirmPassword);
+    const phoneError = validatePhone(trimmedPhone);
 
-  if (emailError || usernameError || passwordError || confirmPasswordError || phoneError) {
-    setErrors({
-      email: emailError,
-      username: usernameError,
-      password: passwordError,
-      confirmPassword: confirmPasswordError,
-      phoneNo: phoneError
-    });
-    setIsLoading(false);
-    return;
-  }
-
-  try {
-    // ✅ Step: Check if email or phone exists
-const response = await axios.post(`${API_URL}/user/check-exists`, {
-  email: trimmedEmail,
-  phoneNo: trimmedPhone
-});
-
-    const { emailExists, phoneExists } = response.data;
-
-    const newErrors = {};
-    if (emailExists) newErrors.email = 'Email already in use';
-    if (phoneExists) newErrors.phoneNo = 'Phone number already registered';
-
-    if (emailExists || phoneExists) {
-      setErrors(prev => ({ ...prev, ...newErrors }));
+    if (emailError || usernameError || passwordError || confirmPasswordError || phoneError) {
+      setErrors({
+        email: emailError,
+        username: usernameError,
+        password: passwordError,
+        confirmPassword: confirmPasswordError,
+        phoneNo: phoneError
+      });
       setIsLoading(false);
       return;
     }
 
-    // ✅ Step: All good — go to OTP screen
-    navigation.navigate('PhoneVerificationScreen', {
-      email: trimmedEmail,
-      userName: trimmedUsername,
-      password: trimmedPassword,
-      phoneNo: trimmedPhone,
-    });
-  } catch (error) {
-    console.error('Check exist error:', error);
-    Alert.alert('Error', 'Something went wrong. Please try again later.');
-  } finally {
-    setIsLoading(false);
-  }
-};
+    try {
+      // ✅ Step: Check if email or phone exists
+      const response = await axios.post(`${API_URL}/user/check-exists`, {
+        email: trimmedEmail,
+        phoneNo: trimmedPhone
+      });
+
+      const { emailExists, phoneExists } = response.data;
+
+      const newErrors = {};
+      if (emailExists) newErrors.email = 'Email already in use';
+      if (phoneExists) newErrors.phoneNo = 'Phone number already registered';
+
+      if (emailExists || phoneExists) {
+        setErrors(prev => ({ ...prev, ...newErrors }));
+        setIsLoading(false);
+        return;
+      }
+
+      // ✅ Step: All good — go to OTP screen
+      navigation.navigate('PhoneVerificationScreen', {
+        email: trimmedEmail,
+        userName: trimmedUsername,
+        password: trimmedPassword,
+        phoneNo: trimmedPhone,
+      });
+    } catch (error) {
+      console.error('Check exist error:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
 
   return (
