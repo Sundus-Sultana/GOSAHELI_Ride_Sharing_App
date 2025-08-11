@@ -79,7 +79,7 @@ export default function Registration({ navigation }) {
   // ^\+92    => starts with literal '+92'
   // 3\d{9}$  => next is '3' followed by exactly 9 digits, and end of string
   if (!/^\+923\d{9}$/.test(phoneNo)) 
-    return 'Enter a valid phone number in format +923XXXXXXXXX';
+    return 'Enter a phone number in format +923XXXXXXXXX';
 
   return '';
 };
