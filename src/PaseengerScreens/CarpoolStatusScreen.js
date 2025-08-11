@@ -39,6 +39,11 @@ const navigation = useNavigation();
     fetchAcceptedRides(); // fetch only when selected
   }
 }, [selectedTab]);
+useEffect(() => {
+  if (selectedTab === 'pending') {
+    console.log('Pending rides:', rides.pending);
+  }
+}, [selectedTab, rides]);
 
 useEffect(() => {
   if (route.params?.tab === 'Accepted') {
@@ -222,18 +227,17 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
 };
 
 
-  const fetchRides = async () => {
+ const fetchRides = async () => {
   try {
     const response = await getCarpoolRequestsByPassenger(passengerId);
-    
     if (response.success) {
-      setRides(response.data); // response.data contains the categorized rides
+      console.log("All categorized rides:", response.data);
+      setRides(response.data);
     } else {
       console.error("API Error:", response.message);
     }
   } catch (err) {
     console.error("Error fetching rides:", err);
-    Alert.alert("Error", "Failed to load rides. Please try again.");
   } finally {
     setLoading(false);
   }

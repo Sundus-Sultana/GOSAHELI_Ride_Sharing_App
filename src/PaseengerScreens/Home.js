@@ -29,10 +29,6 @@ import axios from 'axios'; // ✅ Make sure this is at the top
 import { API_URL } from '../../api.js'; 
 import { registerForPushNotificationsAsync } from '../utils/NotificationSetup'; // Adjust path if needed
 
-
-
-
-
 const Home = ({ route }) => {
   const navigation = useNavigation();
   const [passengerId, setPassengerId] = useState(null);
@@ -47,6 +43,8 @@ const Home = ({ route }) => {
   // Always prioritize route.params.userId if provided
   const userId = route?.params?.userId ?? auth.currentUser?.uid;
   const userName = route?.params?.userName ?? auth.currentUser?.displayName;
+  console.log('USERID IN Home SCREEN', userId);
+  console.log('name IN Home SCREEN', userName);
 
  useEffect(() => {
     const askForPushOnce = async () => {
@@ -94,7 +92,14 @@ const Home = ({ route }) => {
         console.log("PassengerID set in state:", response.data.passenger.PassengerID);
       }
     } catch (error) {
-      console.error("Error fetching PassengerID:", error);
+    if (error.response && error.response.status === 404) {
+        // Passenger record not found — expected, so do nothing or just console log
+        console.log("Passenger record not found (404) — user probably new, no action needed yet.");
+      } else {
+        // For other errors, log or alert
+        console.error("Error fetching PassengerID:", error);
+        Alert.alert("Error", "Unable to fetch PassengerID. Please try again.");
+      }
     }
   };
 

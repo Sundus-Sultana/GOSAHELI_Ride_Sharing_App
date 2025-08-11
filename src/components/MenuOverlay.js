@@ -136,10 +136,12 @@ const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,passengerI
           onPress: async () => {
             try {
               await auth.signOut();
+              console.log('user ',userId, ' successfully logged out');
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'LandingActivity' }],
               });
+              
             } catch (error) {
               console.error('Logout error:', error);
               Alert.alert('Error', 'Could not sign out. Please try again.');

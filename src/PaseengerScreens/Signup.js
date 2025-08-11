@@ -72,11 +72,17 @@ export default function Registration({ navigation }) {
     return '';
   };
 
-  const validatePhone = (phoneNo) => {
-    if (!phoneNo) return 'Phone number is required';
-    if (!/^\+?\d{10,15}$/.test(phoneNo)) return 'Enter a valid phone number';
-    return '';
-  };
+ const validatePhone = (phoneNo) => {
+  if (!phoneNo) return 'Phone number is required';
+  
+  // Regex explanation:
+  // ^\+92    => starts with literal '+92'
+  // 3\d{9}$  => next is '3' followed by exactly 9 digits, and end of string
+  if (!/^\+923\d{9}$/.test(phoneNo)) 
+    return 'Enter a valid phone number in format +923XXXXXXXXX';
+
+  return '';
+};
 
   const handleBlur = (field) => {
     let errorMessage;
@@ -204,7 +210,7 @@ export default function Registration({ navigation }) {
           <MaterialIcons name="phone" size={20} color="#D64584" style={styles.inputIcon} />
           <TextInput
             ref={phoneRef}
-            placeholder="Phone Number"
+            placeholder="+923xxxxxxxxx"
             value={phoneNo}
             onChangeText={setPhoneNo}
             onBlur={() => handleBlur('phoneNo')}

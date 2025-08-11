@@ -26,12 +26,11 @@ router.post('/', async (req, res) => {
     );
 
     // ✅ Update last_role to 'driver'
-    await client.query(
-      'UPDATE "User" SET "last_role" = $1 WHERE "UserID" = $2',
-      ['driver', userId]
-      
-    );
-  console.log('Update result:', update.rowCount); // Should be 1
+   const update = await client.query(
+  'UPDATE "User" SET "last_role" = $1 WHERE "UserID" = $2',
+  ['driver', userId]
+);
+console.log('Update result:', update.rowCount);
     res.status(201).json({ message: 'Driver created', driverId: result.rows[0].DriverID });
   } catch (error) {
     console.error('Error creating driver:', error);

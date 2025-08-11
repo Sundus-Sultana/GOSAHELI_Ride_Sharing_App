@@ -47,21 +47,45 @@ export default function PhoneVerificationScreen({ route, navigation }) {
 });
 
       // ✅ Save to PostgreSQL
-    await axios.post(USER_ENDPOINT, {
+    const response = await axios.post(USER_ENDPOINT, {
   email,
   username: userName,  // ✅ Correct key sent to backend, correct value used
   password,
   phoneNo,
 });
+// Now fetch the user from PostgreSQL by email to get UserID
+    const getUserResponse = await axios.get(`${USER_ENDPOINT}`, {
+      params: { email: email }
+    });
+
+    if (getUserResponse.data.length > 0) {
+      const dbUser = getUserResponse.data[0];  // assuming the first user is correct
+      const dbUserId = dbUser.UserID;          // Your PostgreSQL UserID column
+
+       // Add your success console log here:
+      console.log(`Signup Successful! Name: ${userName}, Email: ${email}, Phone: ${phoneNo}`);
+
+      console.log('USERID :', dbUserId);
+
+
+    
 
     Alert.alert('Success', 'Phone verified and account created!', [
   {
     text: 'Continue',
     onPress: () => navigation.replace('Home', {
+
       userName: userName, // ✅ pass to Home screen
+       userId: dbUserId,
+      
+       
     }),
   },
 ]);
+} else {
+      throw new Error('User not found after signup.');
+    }
+
 
     } catch (error) {
       console.error('Verification error:', error);

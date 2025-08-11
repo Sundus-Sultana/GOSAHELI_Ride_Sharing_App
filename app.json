@@ -43,7 +43,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.anonymous.saheli",
+      "package": "com.saheli.chat",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSy_kt7eXvL-7dqFns8j6wjDoSb5N1tBmZds"
