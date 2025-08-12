@@ -1,7 +1,11 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
+<<<<<<< Updated upstream
 export const API_URL = 'http://192.168.100.31:5000';
+=======
+export const API_URL = 'http://192.168.100.13:5000';
+>>>>>>> Stashed changes
 
 
 
