@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://192.168.100.3:5000';
+export const API_URL = 'http://192.168.100.13:5000';
+
 
 
 
