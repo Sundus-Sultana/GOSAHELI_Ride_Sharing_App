@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Image, StatusBar,
-  ActivityIndicator,Alert
+  ActivityIndicator,Alert,TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons ,FontAwesome5} from '@expo/vector-icons';
@@ -10,7 +10,7 @@ import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,updateCarpoolStatus 
 import { API_URL } from '../../api';
 import moment from 'moment';
 import { useNavigation } from '@react-navigation/native';
-import { getUserById } from '../utils/ApiCalls';
+import { getUserById ,getFeedbackByRequestId} from '../utils/ApiCalls';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
@@ -30,6 +30,74 @@ const navigation = useNavigation();
     accepted:[]
   });
   const [loading, setLoading] = useState(true);
+
+  // ⭐ Added for feedback
+  const [feedbackData, setFeedbackData] = useState({});
+
+  // ⭐ Handlers for feedback
+  const handleRatingChange = (requestId, rating) => {
+    setFeedbackData(prev => ({
+      ...prev,
+      [requestId]: { ...(prev[requestId] || {}), rating }
+    }));
+  };
+
+  const handleFeedbackMessageChange = (requestId, text) => {
+    setFeedbackData(prev => ({
+      ...prev,
+      [requestId]: { ...(prev[requestId] || {}), message: text }
+    }));
+  };
+
+const submitFeedback = async (item) => {
+  const { rating, message } = feedbackData[item.RequestID] || {};
+  
+  if (!rating) {
+    Alert.alert("Error", "Please select a rating before submitting.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RateValue: rating,
+        DriverID: item.DriverID,       // ✅ from Carpool_Request_Status
+        PassengerID: passengerId, // ✅ from Carpool_Request_Status
+        message,
+        RequestID: item.RequestID,
+      })
+    });
+    console.log('feedback info: RateValue_',rating,', DriverID_',item.DriverID,', PassengerID_',passengerId,', message_',message,', requestID_',item.RequestID)
+
+    const json = await res.json();
+    if (json.success) {
+      Alert.alert("Thank you!", "Your feedback has been submitted.");
+await fetchRides();
+    } else {
+      Alert.alert("Error", json.message || "Failed to submit feedback.");
+    }
+  } catch (err) {
+    console.error("Feedback submit error:", err);
+    Alert.alert("Error", "Could not submit feedback.");
+  }
+};
+
+
+
+  //✅enable polling every 10 seconds
+  useEffect(() => {
+    let interval = null;
+  
+    if (passengerId) {
+      interval = setInterval(() => {
+        fetchRides();
+      }, 20000); // every 20 seconds
+    }
+  
+    return () => clearInterval(interval);
+  }, [passengerId]);
 
   useEffect(() => {
     fetchRides();
@@ -227,12 +295,34 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
 };
 
 
- const fetchRides = async () => {
+
+const fetchRides = async () => {
   try {
     const response = await getCarpoolRequestsByPassenger(passengerId);
     if (response.success) {
-      console.log("All categorized rides:", response.data);
-      setRides(response.data);
+      const ridesData = response.data;
+
+      // Fetch feedback for completed rides
+      const completedWithFeedback = await Promise.all(
+        ridesData.completed.map(async (ride) => {
+          const feedbackRes = await getFeedbackByRequestId(ride.RequestID);
+          if (feedbackRes.success && feedbackRes.data) {
+            return {
+              ...ride,
+              feedback: {
+                rating: feedbackRes.data.RateValue,
+                message: feedbackRes.data.message
+              }
+            };
+          }
+          return ride;
+        })
+      );
+
+      setRides({
+        ...ridesData,
+        completed: completedWithFeedback
+      });
     } else {
       console.error("API Error:", response.message);
     }
@@ -242,6 +332,7 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
     setLoading(false);
   }
 };
+
 
   const renderStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
@@ -276,6 +367,7 @@ const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}
     // Inside renderCard function
 const displayFare = item.fare ? `Rs ${item.fare}` : 'fare not set';
     const lower = (str) => (str || '').toLowerCase();
+    
 
    const showPreferences =
   (item.smoking_preference && lower(item.smoking_preference) !== 'no preference') ||
@@ -424,6 +516,89 @@ if (item.allows_luggage) {
     )}
   </View>
 )}
+{/* Feedback section for completed rides */}
+{selectedTab === 'completed' && item.driver_name && (
+  <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eee' }}>
+
+    {item.feedback ? (
+      // ✅ Already Rated - Show stars + text
+      
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {[1, 2, 3, 4, 5].map(star => (
+          <Ionicons
+            key={star}
+            name={item.feedback.rating >= star ? 'star' : 'star-outline'}
+            size={24}
+            color="#e3c204ff"
+            style={{ marginHorizontal: 2 }}
+          />
+        ))}
+        <Text style={{ marginLeft: 10, fontWeight: '600', color: '#555' }}>
+          Rated
+        </Text>
+      </View>
+    ) : (
+      // ⭐ No rating yet → Show current input UI
+      <>
+        {/* Rating Stars */}
+  <Text style={{ fontWeight: '600', marginBottom: 4, color: '#555' }}>
+    Rate this driver
+  </Text>
+        <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+          {[1, 2, 3, 4, 5].map(star => (
+            <TouchableOpacity
+              key={star}
+              onPress={() => handleRatingChange(item.RequestID, star)}
+            >
+              <Ionicons
+                name={
+                  (feedbackData[item.RequestID]?.rating || 0) >= star
+                    ? 'star'
+                    : 'star-outline'
+                }
+                size={24}
+                color="#e3c204ff"
+                style={{ marginHorizontal: 2 }}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {(feedbackData[item.RequestID]?.rating || 0) > 0 && (
+          <>
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: '#ccc',
+                borderRadius: 8,
+                padding: 8,
+                minHeight: 60,
+                textAlignVertical: 'top',
+                marginBottom: 10
+              }}
+              placeholder="Write a complaint or suggestion about the driver..."
+              multiline
+              value={feedbackData[item.RequestID]?.message || ''}
+              onChangeText={text => handleFeedbackMessageChange(item.RequestID, text)}
+            />
+            <TouchableOpacity
+              style={{
+                backgroundColor: primaryColor,
+                paddingVertical: 10,
+                borderRadius: 8,
+                alignItems: 'center'
+              }}
+              onPress={() => submitFeedback(item)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '600' }}>Submit Feedback</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </>
+    )}
+  </View>
+)}
+
 
 
           {/* Footer */}

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your local IP and backend port
-export const API_URL = 'http://10.140.88.181:5000';
+export const API_URL = 'http://192.168.100.3:5000';
 
 
 
@@ -200,5 +200,31 @@ export const saveDriverCarpoolProfile = async (profileData) => {
   } catch (error) {
     console.error('Error saving Driver carpool profile:', error.response?.data || error.message);
     throw error;
+  }
+};
+
+// ✅ Submit complaint
+export const submitComplaintApi = async ({ driverId, passengerId, description }) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/complaints`, {
+      driverId,
+      passengerId,
+      description
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error submitting complaint:', error);
+    return null;
+  }
+};
+
+// ✅ Get passenger by userId
+export const getPassengerByUserId = async (userId) => {
+  try {
+    const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching Passenger by ID:', error);
+    return null;
   }
 };

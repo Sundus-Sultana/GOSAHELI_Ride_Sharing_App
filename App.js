@@ -85,7 +85,7 @@ useEffect(() => {
           <Stack.Screen name="Offers" component={Offers} />
           <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
           <Stack.Screen name="about" component={about} />
-          <Stack.Screen name="Support" component={Support} />
+          <Stack.Screen name="Support" component={Support}options={{ headerShown: false }} />
           <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChangePassword" component={ChangePassword} options={{ headerShown: false }} />
 

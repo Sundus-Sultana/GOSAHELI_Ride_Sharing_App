@@ -226,7 +226,7 @@ const userRes = await getUserById(userId);
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.menuItem} onPress={() => {
-                    closeModal(); navigation.navigate('Support');
+                    closeModal(); navigation.navigate('Support',userId);
                   }}>
                     <Text style={styles.menuText}>Support</Text>
                   </TouchableOpacity>

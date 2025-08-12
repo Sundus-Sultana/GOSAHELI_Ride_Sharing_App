@@ -154,7 +154,10 @@ useEffect(() => {
     } else {
       Alert.alert("Thanks for your feedback!", "We appreciate your honesty. What could we improve?", [
         { text: "Cancel", style: "cancel" },
-        { text: "Give Feedback", onPress: () => navigation.navigate("Support") },
+        { text: "Give Feedback", onPress: () => navigation.navigate("Support", {
+                userId: userId,
+                driverId: driver?.DriverID,  // Pass driverId
+              }) },
       ]);
     }
   };

@@ -1,3 +1,4 @@
+//backend/routes/carpool.js
 const express = require('express');
 const router = express.Router();
 const client = require('../db');
@@ -323,33 +324,44 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
         v."VehicleModel",
         v."PlateNumber",
         v.color
-      FROM "Carpool_Request_Status" crs
-      INNER JOIN "Driver" d ON crs."DriverID" = d."DriverID"
-      INNER JOIN "User" u ON d."UserID" = u."UserID"
-      LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
-      WHERE crs."PassengerID" = $1
-      ORDER BY crs.date ASC;
+    FROM "Carpool_Request_Status" crs
+LEFT JOIN "Driver" d ON crs."DriverID" = d."DriverID"
+LEFT JOIN "User" u ON d."UserID" = u."UserID"
+LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
+WHERE crs."PassengerID" = $1
+ORDER BY crs.date ASC;
     `;
 
     const { rows } = await client.query(query, [passengerId]);
 
-    const categorized = {
-      pending: [],
-      accepted: [],
-      upcoming: [],
-      completed: [],
-      rejected: []
-    };
+  // Then after fetching rows:
+const categorized = {
+  pending: [],
+  accepted: [],
+  upcoming: [],
+  completed: [],
+  rejected: []
+};
 
     rows.forEach(ride => {
-      const status = (ride.status || '').toLowerCase();
-      if (status === 'accepted') categorized.accepted.push(ride);
-      else if (status === 'joined') categorized.upcoming.push(ride);
-      else if (status === 'completed') categorized.completed.push(ride);
-      else if (status === 'rejected') categorized.rejected.push(ride);
-      else if (status === 'pending') categorized.pending.push(ride);
-    });
+  const status = (ride.status || '').toLowerCase();
 
+  if (status === 'pending') {
+    // clear driver info for pending rides (no driver yet)
+    ride.driver_user_id = null;
+    ride.driver_name = null;
+    ride.driver_photo = null;
+    ride.VehicleModel = null;
+    ride.PlateNumber = null;
+    ride.color = null;
+  }
+
+  if (status === 'pending') categorized.pending.push(ride);
+  else if (status === 'accepted') categorized.accepted.push(ride);
+  else if (status === 'joined') categorized.upcoming.push(ride);
+  else if (status === 'completed') categorized.completed.push(ride);
+  else if (status === 'rejected') categorized.rejected.push(ride);
+});
     res.status(200).json({ success: true, data: categorized });
   } catch (err) {
     console.error("Error fetching all rides:", err);

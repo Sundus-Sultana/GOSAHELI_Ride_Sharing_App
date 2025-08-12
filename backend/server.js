@@ -58,6 +58,10 @@ app.use('/api/feedback', feedbackRoute);
 const notificationRoutes = require('./routes/notifications'); // adjust path if needed
 app.use('/api', notificationRoutes);
 
+//  complaints
+app.use('/api/complaints', require('./routes/complaints'));
+
+
 
 //  Become Passenger
 const becomePassengerRoute = require('./routes/becomePassenger');
@@ -226,6 +230,7 @@ app.get('/user-by-id/:userId', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// ✅ Get Driver by UserID
 app.get('/driver-by-user-id/:userId', async (req, res) => {
   const { userId } = req.params;
   try {

@@ -209,6 +209,30 @@ useEffect(() => {
     setRating(selectedRating);
   };
 
+const fetchPassengerIdAndNavigateToSupport = async () => {
+  try {
+    console.log("Calling for support:", `${API_URL}/api/get-passenger/${userId}`);
+    const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+    if (response.data.passenger?.PassengerID) {
+      const passengerId = response.data.passenger.PassengerID;
+      console.log("Fetched PassengerID:", passengerId);
+      setPassengerId(passengerId);
+
+      // ✅ Navigate to Support screen
+      navigation.navigate('Support', {
+        userId: userId,
+        passengerId: passengerId
+      });
+    } else {
+      Alert.alert("Error", "Passenger record not found.");
+    }
+  } catch (error) {
+    console.error("Error fetching PassengerID:", error.response?.data || error.message);
+    Alert.alert("Error", "Unable to fetch PassengerID. Please try again.");
+  }
+};
+
+
   const submitRating = async () => {
   setHasRated(true);
   setShowRating(false);
@@ -238,7 +262,7 @@ useEffect(() => {
       'We appreciate your honesty. What could we improve?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Give Feedback', onPress: () => navigation.navigate('Support') }
+       { text: 'Give Feedback', onPress: fetchPassengerIdAndNavigateToSupport }
       ]
     );
   }
@@ -363,8 +387,6 @@ useEffect(() => {
 </TouchableOpacity>
 
       </View>
-
-      {/* Ride History Section */}
 
       {/* Ride History Section */}
       <View style={styles.historySection}>

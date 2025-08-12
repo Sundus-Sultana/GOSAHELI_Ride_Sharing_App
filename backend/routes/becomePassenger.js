@@ -104,8 +104,7 @@ router.get('/user-by-request/:requestId', async (req, res) => {
   }
 });
 
-
-// Add this to your backend routes
+    // ✅ Get user by userId
 router.get('/user-by-id/:userId', async (req, res) => {
   const { userId } = req.params;
   

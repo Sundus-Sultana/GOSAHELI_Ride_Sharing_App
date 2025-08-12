@@ -19,12 +19,24 @@ import {
   FontAwesome5, 
   MaterialCommunityIcons 
 } from '@expo/vector-icons';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import axios from 'axios';
+import {
+  getUserById,
+  getDriverById,
+  getPassengerByUserId,
+  submitComplaintApi
+} from '../../api'; 
 const { width } = Dimensions.get('window');
 
-const Support = ({ navigation }) => {
-  const [message, setMessage] = useState('');
-  const [subject, setSubject] = useState('');
+const Support = ({ navigation, route }) => {
+const userId = route?.params?.userId || null;
+    console.log('userid in support: ',userId);
+const [message, setMessage] = useState('');
+  const [driverId, setDriverId] = useState('');
+  const [passengerId, setPassengerId] = useState('');
+    const [subject, setSubject] = useState('');
   const [email, setEmail] = useState('');
   const [expandedQuestion, setExpandedQuestion] = useState(null);
   const animation = useRef(new Animated.Value(0)).current;
@@ -33,7 +45,7 @@ const Support = ({ navigation }) => {
     {
       id: 'payment',
       question: 'How do I pay for rides?',
-      answer: 'You can pay for rides using cash or through our in-app payment system. We accept all major credit/debit cards and mobile payment options.'
+      answer: 'You can pay for rides using cash. We accept all major credit/debit cards and mobile payment options.'
     },
     {
       id: 'safety',
@@ -66,23 +78,6 @@ const Support = ({ navigation }) => {
     }
   };
 
-  const handleSubmit = () => {
-    if (!subject || !message || !email) {
-      Alert.alert('Error', 'Please fill all fields');
-      return;
-    }
-    
-    Alert.alert(
-      'Message Sent',
-      'Thank you for contacting SAHELI support. We will get back to you soon.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
-    
-    setSubject('');
-    setMessage('');
-    setEmail('');
-  };
-
   const openContact = (method, value) => {
     switch(method) {
       case 'phone':
@@ -99,8 +94,78 @@ const Support = ({ navigation }) => {
     }
   };
 
+
+   const submitComplaint = async () => {
+   if (!message.trim()) {
+      Alert.alert('Error', 'Please enter your message.');
+      return;
+    }
+    try {
+      // 1️⃣ Get user data
+      const userData = await getUserById(userId);
+      if (!userData) {
+        Alert.alert('Error', 'Unable to fetch user details.');
+        return;
+      }
+
+      let driverId = null;
+      let passengerId = null;
+
+      if (userData.last_role === 'driver') {
+        const driverData = await getDriverById(userId);
+        if (driverData && driverData.driver) {
+          driverId = driverData.driver.DriverID;
+          console.log('driverid in support : ',driverId);
+        }
+      } else if (userData.last_role === 'passenger') {
+        const passengerData = await getPassengerByUserId(userId);
+        if (passengerData && passengerData.passenger) {
+          passengerId = passengerData.passenger.PassengerID;
+          console.log('passengerid in support: ',passengerId);
+        }
+      }
+
+      if (!driverId && !passengerId) {
+        Alert.alert('Error', 'Unable to find related Driver or Passenger record.');
+        return;
+      }
+
+      // 2️⃣ Submit complaint
+      const complaintResponse = await submitComplaintApi({
+  driverId,
+  passengerId,
+  description: message 
+});
+console.log('driverid, passengerid, message: ',driverId,passengerId,message);
+
+      if (complaintResponse && complaintResponse.message) {
+        Alert.alert('Success', complaintResponse.message, [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+        setMessage('');
+      } else {
+        Alert.alert('Error', 'Failed to submit complaint.');
+      }
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
+  };
+
+
   return (
+    <SafeAreaView style={styles.safeArea}>
+        <StatusBar backgroundColor="#d63384" barStyle="light-content" />
     <View style={styles.container}>
+      {/* Back Button */}
+   <TouchableOpacity 
+    style={styles.backButton} 
+    onPress={() => navigation.goBack()}
+    activeOpacity={0.7}
+  >
+    <Ionicons name="arrow-back" size={30} color="#fff" />
+  </TouchableOpacity>
       {/* Header with solid color instead of gradient */}
       <View style={styles.headerContainer}>
         <View style={styles.header}>
@@ -122,53 +187,29 @@ const Support = ({ navigation }) => {
       <ScrollView style={styles.scrollContainer}>
         {/* Contact Form */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Send us a message</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Subject</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="What's this about?"
-              value={subject}
-              onChangeText={setSubject}
-              placeholderTextColor="#999"
-            />
-          </View>
+  <Text style={styles.sectionTitle}>Send us a message</Text>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Your Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="email@example.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#999"
-            />
-          </View>
+  <View style={styles.inputContainer}>
+    <Text style={styles.label}>Message</Text>
+    <TextInput
+      style={[styles.input, styles.messageInput]}
+      placeholder="Describe your issue..."
+      value={message}
+      onChangeText={setMessage}
+      multiline
+      numberOfLines={4}
+      placeholderTextColor="#999"
+    />
+  </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Message</Text>
-            <TextInput
-              style={[styles.input, styles.messageInput]}
-              placeholder="Describe your issue..."
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={4}
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <TouchableOpacity 
-            style={styles.submitButton}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.submitButtonText}>Send Message</Text>
-            <MaterialIcons name="send" size={20} color="#fff" style={styles.sendIcon} />
-          </TouchableOpacity>
-        </View>
+  <TouchableOpacity 
+    style={styles.submitButton}
+    onPress={submitComplaint}
+  >
+    <Text style={styles.submitButtonText}>Send Message</Text>
+    <MaterialIcons name="send" size={20} color="#fff" style={styles.sendIcon} />
+  </TouchableOpacity>
+</View>
 
         {/* FAQ Section */}
         <View style={styles.sectionCard}>
@@ -268,10 +309,15 @@ const Support = ({ navigation }) => {
         <FontAwesome5 name="whatsapp" size={24} color="#fff" />
       </TouchableOpacity>
     </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+   safeArea: {
+  flex: 1,
+  backgroundColor: "#fff", // To match your header background
+},
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -459,6 +505,14 @@ const styles = StyleSheet.create({
     marginLeft: -25, 
     marginBottom: 25,
   },
+  backButton: {
+  position: 'absolute',
+  top: 15,
+  left: 15,
+  zIndex: 10,
+  padding: 5
+}
+
 });
 
 export default Support;

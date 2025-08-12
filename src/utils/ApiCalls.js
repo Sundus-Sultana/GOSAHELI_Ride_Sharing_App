@@ -108,4 +108,13 @@ export const submitFeedback = async (feedbackData) => {
   });
   return res.json();
 };
+export const getFeedbackByRequestId = async (requestId) => {
+  try {
+    const res = await fetch(`${API_URL}/api/feedback/${requestId}`);
+    return await res.json();
+  } catch (error) {
+    console.error("Error fetching feedback:", error);
+    return { success: false };
+  }
+};
 

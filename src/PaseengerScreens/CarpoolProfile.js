@@ -89,7 +89,7 @@ const CarpoolProfile = () => {
             recurring: profile.is_recurring,
             daysOfWeek: profile.recurring_days?.split(',') || [],
             specialRequests: profile.special_requests || '',
-            fare: price
+            fare: profile.fare|| ''
           }));
 
           setRouteType(profile.route_type || 'One Way');

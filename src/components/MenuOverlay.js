@@ -246,7 +246,7 @@ const MenuOverlay = ({ visible, closeModal, navigation, user, userId ,passengerI
                     /*onPress={handleSupportPress}*/
                     onPress={() => {
                       closeModal();
-                      navigation.navigate('Support');
+                      navigation.navigate('Support',userId);
                     }}
                   >
                     <Text style={styles.menuText}>Support</Text>
