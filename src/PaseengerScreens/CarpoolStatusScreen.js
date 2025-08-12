@@ -2,34 +2,133 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Image, StatusBar,
-  ActivityIndicator,Alert,TextInput
+  ActivityIndicator, Alert, TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Ionicons ,FontAwesome5} from '@expo/vector-icons';
-import { getCarpoolRequestsByPassenger,deleteCarpoolRequest,updateCarpoolStatus } from '../utils/ApiCalls';
+import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { getCarpoolRequestsByPassenger, deleteCarpoolRequest, updateCarpoolStatus } from '../utils/ApiCalls';
 import { API_URL } from '../../api';
 import moment from 'moment';
 import { useNavigation } from '@react-navigation/native';
-import { getUserById ,getFeedbackByRequestId} from '../utils/ApiCalls';
+import { getUserById, getFeedbackByRequestId, addFavourite, removeFavourite, fetchFavourites } from '../utils/ApiCalls';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
 
 const CarpoolStatusScreen = ({ route }) => {
-  const { userId, passengerId ,price} = route.params || {};
-console.log("Price:", price);
-const navigation = useNavigation(); 
+  const { userId, passengerId, price } = route.params || {};
+  console.log("Price:", price);
+  const navigation = useNavigation();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-   const [selectedTab, setSelectedTab] = useState('upcoming');
+  const [favouriteDrivers, setFavouriteDrivers] = useState([]); // store DriverIDs
+  const [selectedTab, setSelectedTab] = useState('upcoming');
   const [rides, setRides] = useState({
     upcoming: [],
     completed: [],
     cancelled: [],
     pending: [],
-    accepted:[]
+    accepted: []
   });
   const [loading, setLoading] = useState(true);
+
+
+  //✅enable polling every 10 seconds
+  useEffect(() => {
+    let interval = null;
+
+    if (passengerId) {
+      interval = setInterval(() => {
+        fetchRides();
+      }, 20000); // every 20 seconds
+    }
+
+    return () => clearInterval(interval);
+  }, [passengerId]);
+
+
+ useEffect(() => {
+  if (passengerId) {
+    fetchRides();
+    fetchFavourites(passengerId);
+  }
+}, [passengerId]); // Add passengerId as dependency
+  useEffect(() => {
+    if (selectedTab === 'accepted') {
+      fetchAcceptedRides(); // fetch only when selected
+    }
+  }, [selectedTab]);
+  useEffect(() => {
+    if (selectedTab === 'pending') {
+      console.log('Pending rides:', rides.pending);
+      console.log('Completed Carpools: ', rides.completed);
+    }
+  }, [selectedTab, rides]);
+   useEffect(() => {
+    if (selectedTab === 'completed') {
+      console.log('Completed Carpools: ', rides.completed);
+    }
+  }, [selectedTab, rides]);
+
+  useEffect(() => {
+    if (route.params?.tab === 'Accepted') {
+      setActiveTab('Accepted');
+    }
+  }, [route.params]);
+
+  // Load favourites when the screen mounts
+ // In your useEffect or wherever you call fetchFavourites
+useEffect(() => {
+  const loadFavourites = async () => {
+    try {
+      if (!passengerId) {
+        console.warn("Cannot fetch favourites - passengerId missing");
+        return;
+      }
+      
+      const res = await fetchFavourites(passengerId);
+      
+      if (res.success) {
+        // Only update state if passenger has favorites
+        if (res.exists) {
+          setFavouriteDrivers(res.favourites || []);
+        } else {
+          // Passenger has no favorites, keep empty array
+          setFavouriteDrivers([]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching favourites:", err);
+    }
+  };
+
+  if (passengerId && selectedTab === 'completed') {
+    loadFavourites();
+  }
+}, [selectedTab, passengerId]);
+
+
+  // Toggle favourite
+  const toggleFavourite = async (driverID) => {
+    try {
+      const isFav = favouriteDrivers.includes(driverID);
+
+      if (isFav) {
+        // Remove from favourites
+        await removeFavourite(passengerId, driverID);
+        setFavouriteDrivers(favouriteDrivers.filter(id => id !== driverID));
+      } else {
+        // Add to favourites
+        await addFavourite(passengerId, driverID);
+        setFavouriteDrivers([...favouriteDrivers, driverID]);
+      }
+    } catch (err) {
+      console.error("Error toggling favourite:", err);
+      Alert.alert("Error", "Could not update favourite");
+    }
+  };
+
+
 
   // ⭐ Added for feedback
   const [feedbackData, setFeedbackData] = useState({});
@@ -49,289 +148,255 @@ const navigation = useNavigation();
     }));
   };
 
-const submitFeedback = async (item) => {
-  const { rating, message } = feedbackData[item.RequestID] || {};
-  
-  if (!rating) {
-    Alert.alert("Error", "Please select a rating before submitting.");
-    return;
-  }
+  const submitFeedback = async (item) => {
+    const { rating, message } = feedbackData[item.RequestID] || {};
 
-  try {
-    const res = await fetch(`${API_URL}/api/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RateValue: rating,
-        DriverID: item.DriverID,       // ✅ from Carpool_Request_Status
-        PassengerID: passengerId, // ✅ from Carpool_Request_Status
-        message,
-        RequestID: item.RequestID,
-      })
-    });
-    console.log('feedback info: RateValue_',rating,', DriverID_',item.DriverID,', PassengerID_',passengerId,', message_',message,', requestID_',item.RequestID)
-
-    const json = await res.json();
-    if (json.success) {
-      Alert.alert("Thank you!", "Your feedback has been submitted.");
-await fetchRides();
-    } else {
-      Alert.alert("Error", json.message || "Failed to submit feedback.");
-    }
-  } catch (err) {
-    console.error("Feedback submit error:", err);
-    Alert.alert("Error", "Could not submit feedback.");
-  }
-};
-
-
-
-  //✅enable polling every 10 seconds
-  useEffect(() => {
-    let interval = null;
-  
-    if (passengerId) {
-      interval = setInterval(() => {
-        fetchRides();
-      }, 20000); // every 20 seconds
-    }
-  
-    return () => clearInterval(interval);
-  }, [passengerId]);
-
-  useEffect(() => {
-    fetchRides();
-  }, []);
-  useEffect(() => {
-  if (selectedTab === 'accepted') {
-    fetchAcceptedRides(); // fetch only when selected
-  }
-}, [selectedTab]);
-useEffect(() => {
-  if (selectedTab === 'pending') {
-    console.log('Pending rides:', rides.pending);
-  }
-}, [selectedTab, rides]);
-
-useEffect(() => {
-  if (route.params?.tab === 'Accepted') {
-    setActiveTab('Accepted');
-  }
-}, [route.params]);
-
-const handleAccept = (requestId) => {
-  Alert.alert(
-    "Confirm",
-    "Do you want to join this ride?",
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          try {
-            const res = await updateCarpoolStatus(requestId, "joined");
-            if (res.success) {
-              Alert.alert("Success", "You have joined the ride");
-
-              // ✅ Instant UI update
-              setRides(prev => {
-                const movedRide = prev.accepted.find(r => r.RequestID === requestId);
-                return {
-                  ...prev,
-                  accepted: prev.accepted.filter(r => r.RequestID !== requestId),
-                  upcoming: movedRide ? [...prev.upcoming, { ...movedRide, status: "joined" }] : prev.upcoming
-                };
-              });
-
-              // ⏳ Silent backend refresh
-              setTimeout(fetchRides, 1500);
-            }
-          } catch {
-            Alert.alert("Error", "Failed to join the ride");
-          }
-        }
-      }
-    ]
-  );
-};
-
-
-const handleReject = (requestId) => {
-  Alert.alert(
-    "Confirm",
-    "Do you want to reject this ride?",
-    [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          try {
-            const res = await updateCarpoolStatus(requestId, "rejected");
-            if (res.success) {
-              Alert.alert("Success", "You have rejected the ride");
-
-              // ✅ Instant UI update
-              setRides(prev => {
-                const movedRide = prev.accepted.find(r => r.RequestID === requestId);
-                return {
-                  ...prev,
-                  accepted: prev.accepted.filter(r => r.RequestID !== requestId),
-                  rejected: movedRide ? [...prev.rejected, { ...movedRide, status: "rejected" }] : prev.rejected
-                };
-              });
-
-              // ⏳ Silent backend refresh
-              setTimeout(fetchRides, 1500);
-            }
-          } catch {
-            Alert.alert("Error", "Failed to reject the ride");
-          }
-        }
-      }
-    ]
-  );
-};
-
-
-
-const handleChatPress = async (requestId, driverUserId, driverName, driverPhoto) => {
-  try {
-    setLoading(true);
-    
-    // Get passenger details
-    const passengerDetails = await getUserById(userId);
-    if (!passengerDetails) {
-      Alert.alert("Error", "Could not load your passenger info");
+    if (!rating) {
+      Alert.alert("Error", "Please select a rating before submitting.");
       return;
     }
 
-    // Get driver details
-    const driverDetails = await getUserById(driverUserId);
-    if (!driverDetails) {
-      Alert.alert("Error", "Could not load driver info");
-      return;
+    try {
+      const res = await fetch(`${API_URL}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          RateValue: rating,
+          DriverID: item.DriverID,       // ✅ from Carpool_Request_Status
+          PassengerID: passengerId, // ✅ from Carpool_Request_Status
+          message,
+          RequestID: item.RequestID,
+        })
+      });
+      console.log('feedback info: RateValue_', rating, ', DriverID_', item.DriverID, ', PassengerID_', passengerId, ', message_', message, ', requestID_', item.RequestID)
+
+      const json = await res.json();
+      if (json.success) {
+        Alert.alert("Thank you!", "Your feedback has been submitted.");
+        await fetchRides();
+      } else {
+        Alert.alert("Error", json.message || "Failed to submit feedback.");
+      }
+    } catch (err) {
+      console.error("Feedback submit error:", err);
+      Alert.alert("Error", "Could not submit feedback.");
     }
+  };
 
-    navigation.navigate('ChatUI', {
-      driverId: driverUserId,
-      userId,
-      chatRoomId: `chat_request_${requestId}`,
-      currentUser: 'passenger',
-      currentUserId: userId,
-      currentUserName: passengerDetails.username,
-      currentUserPhoto: passengerDetails.photo_url,
-      receiverUserId: driverUserId,
-      receiverUserName: driverName,
-      receiverUserPhoto: driverPhoto
-    });
 
-  } catch (err) {
-    console.error('Error opening chat:', err);
-    Alert.alert("Error", "Failed to open chat");
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleAccept = (requestId) => {
+    Alert.alert(
+      "Confirm",
+      "Do you want to join this ride?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes",
+          onPress: async () => {
+            try {
+              const res = await updateCarpoolStatus(requestId, "joined");
+              if (res.success) {
+                Alert.alert("Success", "You have joined the ride");
+
+                // ✅ Instant UI update
+                setRides(prev => {
+                  const movedRide = prev.accepted.find(r => r.RequestID === requestId);
+                  return {
+                    ...prev,
+                    accepted: prev.accepted.filter(r => r.RequestID !== requestId),
+                    upcoming: movedRide ? [...prev.upcoming, { ...movedRide, status: "joined" }] : prev.upcoming
+                  };
+                });
+
+                // ⏳ Silent backend refresh
+                setTimeout(fetchRides, 1500);
+              }
+            } catch {
+              Alert.alert("Error", "Failed to join the ride");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+
+  const handleReject = (requestId) => {
+    Alert.alert(
+      "Confirm",
+      "Do you want to reject this ride?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes",
+          onPress: async () => {
+            try {
+              const res = await updateCarpoolStatus(requestId, "rejected");
+              if (res.success) {
+                Alert.alert("Success", "You have rejected the ride");
+
+                // ✅ Instant UI update
+                setRides(prev => {
+                  const movedRide = prev.accepted.find(r => r.RequestID === requestId);
+                  return {
+                    ...prev,
+                    accepted: prev.accepted.filter(r => r.RequestID !== requestId),
+                    rejected: movedRide ? [...prev.rejected, { ...movedRide, status: "rejected" }] : prev.rejected
+                  };
+                });
+
+                // ⏳ Silent backend refresh
+                setTimeout(fetchRides, 1500);
+              }
+            } catch {
+              Alert.alert("Error", "Failed to reject the ride");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+
+
+  const handleChatPress = async (requestId, driverUserId, driverName, driverPhoto) => {
+    try {
+      setLoading(true);
+
+      // Get passenger details
+      const passengerDetails = await getUserById(userId);
+      if (!passengerDetails) {
+        Alert.alert("Error", "Could not load your passenger info");
+        return;
+      }
+
+      // Get driver details
+      const driverDetails = await getUserById(driverUserId);
+      if (!driverDetails) {
+        Alert.alert("Error", "Could not load driver info");
+        return;
+      }
+
+      navigation.navigate('ChatUI', {
+        driverId: driverUserId,
+        userId,
+        chatRoomId: `chat_request_${requestId}`,
+        currentUser: 'passenger',
+        currentUserId: userId,
+        currentUserName: passengerDetails.username,
+        currentUserPhoto: passengerDetails.photo_url,
+        receiverUserId: driverUserId,
+        receiverUserName: driverName,
+        receiverUserPhoto: driverPhoto
+      });
+
+    } catch (err) {
+      console.error('Error opening chat:', err);
+      Alert.alert("Error", "Failed to open chat");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchAcceptedRides = async () => {
-  try {
-const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}`);
-    const json = await res.json();
-     console.log("Accepted rides data:", json.data); 
+    try {
+      const res = await fetch(`${API_URL}/api/carpool/accepted-requests/${passengerId}`);
+      const json = await res.json();
+      console.log("Accepted rides data:", json.data);
 
-    if (json.success) {
-      setRides(prev => ({ ...prev, accepted: json.data }));
-    } else {
-      Alert.alert("Error", json.message || "Could not fetch accepted rides");
+      if (json.success) {
+        setRides(prev => ({ ...prev, accepted: json.data }));
+      } else {
+        Alert.alert("Error", json.message || "Could not fetch accepted rides");
+      }
+    } catch (err) {
+      console.error("Fetch accepted rides error:", err);
     }
-  } catch (err) {
-    console.error("Fetch accepted rides error:", err);
-  }
-};
+  };
 
 
   const handleDelete = async (requestId) => {
-  Alert.alert(
-    'Confirm Deletion',
-    'Are you sure you want to delete this ride?',
-    [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Delete',
-        onPress: async () => {
-          try {
-            setIsDeleting(true);              // ✅ Moved here
-            setDeletingId(requestId);         // ✅ Moved here
-
-            const response = await deleteCarpoolRequest(requestId);
-
-            if (response.success) {
-              await fetchRides();
-              Alert.alert('Success', response.message || 'Carpool Request deleted successfully');
-            } else {
-              Alert.alert('Error', response.message || 'Failed to delete carpool');
-            }
-          } catch (error) {
-            console.error('Delete error:', error);
-            Alert.alert(
-              'Error',
-              error.response?.data?.message ||
-              error.message ||
-              'Failed to delete ride'
-            );
-          } finally {
-            setIsDeleting(false);             // ✅ Will now properly reset spinner
-            setDeletingId(null);
-          }
+    Alert.alert(
+      'Confirm Deletion',
+      'Are you sure you want to delete this ride?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
         },
-        style: 'destructive'
-      },
-    ],
-    { cancelable: true }
-  );
-};
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              setIsDeleting(true);              // ✅ Moved here
+              setDeletingId(requestId);         // ✅ Moved here
 
+              const response = await deleteCarpoolRequest(requestId);
 
-
-const fetchRides = async () => {
-  try {
-    const response = await getCarpoolRequestsByPassenger(passengerId);
-    if (response.success) {
-      const ridesData = response.data;
-
-      // Fetch feedback for completed rides
-      const completedWithFeedback = await Promise.all(
-        ridesData.completed.map(async (ride) => {
-          const feedbackRes = await getFeedbackByRequestId(ride.RequestID);
-          if (feedbackRes.success && feedbackRes.data) {
-            return {
-              ...ride,
-              feedback: {
-                rating: feedbackRes.data.RateValue,
-                message: feedbackRes.data.message
+              if (response.success) {
+                await fetchRides();
+                Alert.alert('Success', response.message || 'Carpool Request deleted successfully');
+              } else {
+                Alert.alert('Error', response.message || 'Failed to delete carpool');
               }
-            };
-          }
-          return ride;
-        })
-      );
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert(
+                'Error',
+                error.response?.data?.message ||
+                error.message ||
+                'Failed to delete ride'
+              );
+            } finally {
+              setIsDeleting(false);             // ✅ Will now properly reset spinner
+              setDeletingId(null);
+            }
+          },
+          style: 'destructive'
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
-      setRides({
-        ...ridesData,
-        completed: completedWithFeedback
-      });
-    } else {
-      console.error("API Error:", response.message);
+
+
+  const fetchRides = async () => {
+    try {
+      const response = await getCarpoolRequestsByPassenger(passengerId);
+      if (response.success) {
+        const ridesData = response.data;
+
+        // Fetch feedback for completed rides
+        const completedWithFeedback = await Promise.all(
+          ridesData.completed.map(async (ride) => {
+            const feedbackRes = await getFeedbackByRequestId(ride.RequestID);
+            if (feedbackRes.success && feedbackRes.data) {
+              return {
+                ...ride,
+                feedback: {
+                  rating: feedbackRes.data.RateValue,
+                  message: feedbackRes.data.message
+                }
+              };
+            }
+            return ride;
+          })
+        );
+
+        setRides({
+          ...ridesData,
+          completed: completedWithFeedback
+        });
+      } else {
+        console.error("API Error:", response.message);
+      }
+    } catch (err) {
+      console.error("Error fetching rides:", err);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Error fetching rides:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   const renderStatusBadge = (status) => {
@@ -365,42 +430,42 @@ const fetchRides = async () => {
     const pickupTime = moment(item.pickup_time, 'HH:mm:ss').format('hh:mm A');
     const dropoffTime = item.dropoff_time ? moment(item.dropoff_time, 'HH:mm:ss').format('hh:mm A') : null;
     // Inside renderCard function
-const displayFare = item.fare ? `Rs ${item.fare}` : 'fare not set';
+    const displayFare = item.fare ? `Rs ${item.fare}` : 'fare not set';
     const lower = (str) => (str || '').toLowerCase();
-    
 
-   const showPreferences =
-  (item.smoking_preference && lower(item.smoking_preference) !== 'no preference') ||
-  (item.music_preference && lower(item.music_preference) !== 'no preference') ||
-  (item.conversation_preference && lower(item.conversation_preference) !== 'no requirements') ||
-  item.allows_luggage;
 
-const preferences = [];
+    const showPreferences =
+      (item.smoking_preference && lower(item.smoking_preference) !== 'no preference') ||
+      (item.music_preference && lower(item.music_preference) !== 'no preference') ||
+      (item.conversation_preference && lower(item.conversation_preference) !== 'no requirements') ||
+      item.allows_luggage;
 
-if (item.smoking_preference && lower(item.smoking_preference) !== 'no-preference') {
-  preferences.push({
-    icon: <MaterialIcons name="smoking-rooms" size={16} color={primaryColor} />,
-    label: `Smoking: ${item.smoking_preference}`
-  });
-}
-if (item.music_preference && lower(item.music_preference) !== 'no-preference') {
-  preferences.push({
-    icon: <Ionicons name="musical-notes" size={16} color={primaryColor} />,
-    label: `Music: ${item.music_preference}`
-  });
-}
-if (item.conversation_preference && lower(item.conversation_preference) !== 'no-preference' && lower(item.conversation_preference) !== 'no requirements') {
-  preferences.push({
-    icon: <Ionicons name="chatbubble-ellipses" size={16} color={primaryColor} />,
-    label: `Conversation: ${item.conversation_preference}`
-  });
-}
-if (item.allows_luggage) {
-  preferences.push({
-    icon: <FontAwesome5 name="suitcase-rolling" size={16} color={primaryColor} />,
-    label: 'Luggage Allowed'
-  });
-}
+    const preferences = [];
+
+    if (item.smoking_preference && lower(item.smoking_preference) !== 'no-preference') {
+      preferences.push({
+        icon: <MaterialIcons name="smoking-rooms" size={16} color={primaryColor} />,
+        label: `Smoking: ${item.smoking_preference}`
+      });
+    }
+    if (item.music_preference && lower(item.music_preference) !== 'no-preference') {
+      preferences.push({
+        icon: <Ionicons name="musical-notes" size={16} color={primaryColor} />,
+        label: `Music: ${item.music_preference}`
+      });
+    }
+    if (item.conversation_preference && lower(item.conversation_preference) !== 'no-preference' && lower(item.conversation_preference) !== 'no requirements') {
+      preferences.push({
+        icon: <Ionicons name="chatbubble-ellipses" size={16} color={primaryColor} />,
+        label: `Conversation: ${item.conversation_preference}`
+      });
+    }
+    if (item.allows_luggage) {
+      preferences.push({
+        icon: <FontAwesome5 name="suitcase-rolling" size={16} color={primaryColor} />,
+        label: 'Luggage Allowed'
+      });
+    }
 
 
 
@@ -447,206 +512,222 @@ if (item.allows_luggage) {
 
         {/* Seats */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-          
-          <Text style={{ fontWeight: '400', color: '#555'}}>Passengers: <Text style={{ fontWeight: '600', color: darkGrey,fontSize:22 }}>   {item.seats}<Ionicons name="woman" size={24} color={primaryColor} style={{ marginRight: 4 }} /></Text></Text>
+
+          <Text style={{ fontWeight: '400', color: '#555' }}>Passengers: <Text style={{ fontWeight: '600', color: darkGrey, fontSize: 22 }}>   {item.seats}<Ionicons name="woman" size={24} color={primaryColor} style={{ marginRight: 4 }} /></Text></Text>
         </View>
 
         {/* Preferences */}
-       {preferences.length > 0 && (
-  <View style={{ marginTop: 8 }}>
-    {preferences.map((pref, index) => (
-      <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        {pref.icon}
-        <Text style={{ fontSize: 13, color: '#555', marginLeft: 6 }}>{pref.label}</Text>
-      </View>
-    ))}
-  </View>
-)}
-
-{/* Driver Info */}
-{(selectedTab === 'accepted' || selectedTab === 'upcoming' || selectedTab === 'completed') && item.driver_name && (
-  <View style={styles.driverInfoContainer}>
-    <Image
-      source={{ 
-        uri: item.driver_photo?.startsWith('/') 
-          ? `${API_URL}${item.driver_photo}`
-          : `${API_URL}/uploads/${item.driver_photo}`
-      }}
-      style={styles.driverImage}
-      onError={(e) => console.log("Image loading error:", e.nativeEvent.error)}
-      defaultSource={require('../../assets/empty_avatar.jpg')}
-    />
-    <View style={{ flex: 1 }}>
-      <Text style={styles.driverName}>{item.driver_name}</Text>
-      <Text style={styles.vehicleInfo}>
-        {item.color ? `${item.color} ` : ''}
-        {item.VehicleModel || 'No vehicle info'}
-        {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
-      </Text>
-    </View>
-
-    {/* Chat only in accepted & upcoming */}
-    {(selectedTab === 'accepted' || selectedTab === 'upcoming') && (
-      <TouchableOpacity
-        style={{
-          marginTop: 10,
-          padding: 4,
-          paddingRight: 10,
-          borderRadius: 10,
-          alignSelf: 'flex-end',
-          flexDirection: 'row',
-          alignItems: 'center',
-          elevation: 6,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          backgroundColor: '#D64584'
-        }}
-        onPress={() => handleChatPress(
-          item.RequestID,
-          item.driver_user_id,
-          item.driver_name,
-          item.driver_photo
+        {preferences.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            {preferences.map((pref, index) => (
+              <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                {pref.icon}
+                <Text style={{ fontSize: 13, color: '#555', marginLeft: 6 }}>{pref.label}</Text>
+              </View>
+            ))}
+          </View>
         )}
-      >
-        <Ionicons name="chatbubble-ellipses-sharp" size={20} color="#ffffff" />
-        <Text style={{ color: '#ffffff', marginLeft: 6, fontWeight: 600 }}>Chat</Text>
-      </TouchableOpacity>
-    )}
-  </View>
-)}
-{/* Feedback section for completed rides */}
-{selectedTab === 'completed' && item.driver_name && (
-  <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eee' }}>
 
-    {item.feedback ? (
-      // ✅ Already Rated - Show stars + text
-      
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {[1, 2, 3, 4, 5].map(star => (
-          <Ionicons
-            key={star}
-            name={item.feedback.rating >= star ? 'star' : 'star-outline'}
-            size={24}
-            color="#e3c204ff"
-            style={{ marginHorizontal: 2 }}
-          />
-        ))}
-        <Text style={{ marginLeft: 10, fontWeight: '600', color: '#555' }}>
-          Rated
-        </Text>
-      </View>
-    ) : (
-      // ⭐ No rating yet → Show current input UI
-      <>
-        {/* Rating Stars */}
-  <Text style={{ fontWeight: '600', marginBottom: 4, color: '#555' }}>
-    Rate this driver
-  </Text>
-        <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-          {[1, 2, 3, 4, 5].map(star => (
-            <TouchableOpacity
-              key={star}
-              onPress={() => handleRatingChange(item.RequestID, star)}
-            >
-              <Ionicons
-                name={
-                  (feedbackData[item.RequestID]?.rating || 0) >= star
-                    ? 'star'
-                    : 'star-outline'
-                }
-                size={24}
-                color="#e3c204ff"
-                style={{ marginHorizontal: 2 }}
-              />
-            </TouchableOpacity>
-          ))}
+        {/* Driver Info */}
+        {(selectedTab === 'accepted' || selectedTab === 'upcoming' || selectedTab === 'completed') && item.driver_name && (
+          <View style={styles.driverInfoContainer}>
+            <Image
+              source={{
+                uri: item.driver_photo?.startsWith('/')
+                  ? `${API_URL}${item.driver_photo}`
+                  : `${API_URL}/uploads/${item.driver_photo}`
+              }}
+              style={styles.driverImage}
+              onError={(e) => console.log("Image loading error:", e.nativeEvent.error)}
+              defaultSource={require('../../assets/empty_avatar.jpg')}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.driverName}>{item.driver_name}</Text>
+              <Text style={styles.vehicleInfo}>
+                {item.color ? `${item.color} ` : ''}
+                {item.VehicleModel || 'No vehicle info'}
+                {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
+              </Text>
+            </View>
+            {/* Favourite only in completed tab */}
+            {selectedTab === 'completed' && (
+              <TouchableOpacity
+                style={{ marginRight: 8 }}
+                onPress={() => toggleFavourite(item.DriverID)}
+              >
+                <Ionicons
+                  name={favouriteDrivers.includes(item.DriverID) ? "heart" : "heart-outline"}
+                  size={24}
+                  color={favouriteDrivers.includes(item.DriverID) ? "#D64584" : "#999"}
+                />
+              </TouchableOpacity>
+            )}
+
+
+            {/* Chat only in accepted & upcoming */}
+            {(selectedTab === 'accepted' || selectedTab === 'upcoming') && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  padding: 4,
+                  paddingRight: 10,
+                  borderRadius: 10,
+                  alignSelf: 'flex-end',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  elevation: 6,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  backgroundColor: '#D64584'
+                }}
+                onPress={() => handleChatPress(
+                  item.RequestID,
+                  item.driver_user_id,
+                  item.driver_name,
+                  item.driver_photo
+                )}
+              >
+                <Ionicons name="chatbubble-ellipses-sharp" size={20} color="#ffffff" />
+                <Text style={{ color: '#ffffff', marginLeft: 6, fontWeight: 600 }}>Chat</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        {/* Feedback section for completed rides */}
+        {selectedTab === 'completed' && item.driver_name && (
+          <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#eee' }}>
+
+            {item.feedback ? (
+              // ✅ Already Rated - Show stars + text
+
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Ionicons
+                    key={star}
+                    name={item.feedback.rating >= star ? 'star' : 'star-outline'}
+                    size={24}
+                    color="#e3c204ff"
+                    style={{ marginHorizontal: 2 }}
+                  />
+                ))}
+                <Text style={{ marginLeft: 10, fontWeight: '600', color: '#555' }}>
+                  Rated
+                </Text>
+              </View>
+            ) : (
+              // ⭐ No rating yet → Show current input UI
+              <>
+                {/* Rating Stars */}
+                <Text style={{ fontWeight: '600', marginBottom: 4, color: '#555' }}>
+                  Rate this driver
+                </Text>
+                <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => handleRatingChange(item.RequestID, star)}
+                    >
+                      <Ionicons
+                        name={
+                          (feedbackData[item.RequestID]?.rating || 0) >= star
+                            ? 'star'
+                            : 'star-outline'
+                        }
+                        size={24}
+                        color="#e3c204ff"
+                        style={{ marginHorizontal: 2 }}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {(feedbackData[item.RequestID]?.rating || 0) > 0 && (
+                  <>
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: '#ccc',
+                        borderRadius: 8,
+                        padding: 8,
+                        minHeight: 60,
+                        textAlignVertical: 'top',
+                        marginBottom: 10
+                      }}
+                      placeholder="Write a complaint or suggestion about the driver..."
+                      multiline
+                      value={feedbackData[item.RequestID]?.message || ''}
+                      onChangeText={text => handleFeedbackMessageChange(item.RequestID, text)}
+                    />
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: primaryColor,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        alignItems: 'center'
+                      }}
+                      onPress={() => submitFeedback(item)}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>Submit Feedback</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
+            )}
+          </View>
+        )}
+
+
+
+        {/* Footer */}
+        <View style={styles.cardFooter}>
+          <View style={{
+            borderBottomWidth: 1,
+            borderBottomColor: '#eee', marginBottom: 15
+          }}>
+            <Text style={[styles.actionButtonText, { color: primaryColor, marginTop: 10, marginBottom: 10 }]}>
+              Fare (per day): {displayFare}
+            </Text>
+          </View>
+
+          {selectedTab === 'accepted' && (
+            <View style={styles.acceptRejectContainer}>
+              <TouchableOpacity
+                style={[styles.actionBtn]}
+                onPress={() => handleAccept(item.RequestID)}
+              >
+                <Text style={styles.acceptButtonText}>Join</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn]}
+                onPress={() => handleReject(item.RequestID)}
+              >
+                <Text style={styles.rejectButtonText}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {selectedTab !== 'accepted' &&
+            item.status?.toLowerCase() !== 'completed' &&
+            item.status?.toLowerCase() !== 'rejected' && (
+              <TouchableOpacity
+                onPress={() => handleDelete(item.RequestID)}
+                disabled={isDeleting && deletingId === item.RequestID}
+              >
+                {isDeleting && deletingId === item.RequestID ? (
+                  <ActivityIndicator size="small" color={primaryColor} />
+                ) : (
+                  <Ionicons name="trash-outline" size={20} color={primaryColor} />
+                )}
+              </TouchableOpacity>
+            )}
         </View>
 
-        {(feedbackData[item.RequestID]?.rating || 0) > 0 && (
-          <>
-            <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 8,
-                padding: 8,
-                minHeight: 60,
-                textAlignVertical: 'top',
-                marginBottom: 10
-              }}
-              placeholder="Write a complaint or suggestion about the driver..."
-              multiline
-              value={feedbackData[item.RequestID]?.message || ''}
-              onChangeText={text => handleFeedbackMessageChange(item.RequestID, text)}
-            />
-            <TouchableOpacity
-              style={{
-                backgroundColor: primaryColor,
-                paddingVertical: 10,
-                borderRadius: 8,
-                alignItems: 'center'
-              }}
-              onPress={() => submitFeedback(item)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>Submit Feedback</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </>
-    )}
-  </View>
-)}
-
-
-
-          {/* Footer */}
-<View style={styles.cardFooter}>
-  <View style={{borderBottomWidth: 1,
-    borderBottomColor: '#eee',marginBottom:15}}>
-  <Text style={[styles.actionButtonText, { color: primaryColor,marginTop:10 ,marginBottom:10}]}>
-    Fare (per day): {displayFare}
-  </Text>
-  </View>
-
-  {selectedTab === 'accepted' && (
-    <View style={styles.acceptRejectContainer}>
-      <TouchableOpacity
-        style={[styles.actionBtn]}
-        onPress={() => handleAccept(item.RequestID)}
-      >
-        <Text style={styles.acceptButtonText}>Join</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.actionBtn]}
-        onPress={() => handleReject(item.RequestID)}
-      >
-        <Text style={styles.rejectButtonText}>Reject</Text>
-      </TouchableOpacity>
-    </View>
-  )}
-
-  {selectedTab !== 'accepted' &&
-    item.status?.toLowerCase() !== 'completed' &&
-    item.status?.toLowerCase() !== 'rejected' && (
-      <TouchableOpacity
-        onPress={() => handleDelete(item.RequestID)}
-        disabled={isDeleting && deletingId === item.RequestID}
-      >
-        {isDeleting && deletingId === item.RequestID ? (
-          <ActivityIndicator size="small" color={primaryColor} />
-        ) : (
-          <Ionicons name="trash-outline" size={20} color={primaryColor} />
-        )}
-      </TouchableOpacity>
-    )}
-</View>
-
-</View>
-  );
-};
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -680,7 +761,7 @@ if (item.allows_luggage) {
       ) : (
         <FlatList
           data={rides[selectedTab]}
-keyExtractor={(item, index) => `${item.RequestID || item.requestid}-${index}`}
+          keyExtractor={(item, index) => `${item.RequestID || item.requestid}-${index}`}
           renderItem={renderCard}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -706,10 +787,12 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '600', color: darkGrey },
   tabRow: {
     flexDirection: 'row', justifyContent: 'space-around', marginTop: 10,
-    borderBottomWidth: 1, borderBottomColor: '#eee',paddingHorizontal: 8,
+    borderBottomWidth: 1, borderBottomColor: '#eee', paddingHorizontal: 8,
   },
-  tab: { paddingVertical: 15, alignItems: 'center', width: '20%',paddingHorizontal: 8, // Reduced from 20
-  minWidth: 70 },
+  tab: {
+    paddingVertical: 15, alignItems: 'center', width: '20%', paddingHorizontal: 8, // Reduced from 20
+    minWidth: 70
+  },
   activeTab: { position: 'relative' },
   tabText: { color: '#666', fontWeight: '500', fontSize: 14 },
   activeTabText: { color: primaryColor, fontWeight: '600' },
@@ -736,19 +819,19 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D64584'
   },
-cardFooter: {
-  marginTop: 16,
-  paddingBottom: 10,
-},
+  cardFooter: {
+    marginTop: 16,
+    paddingBottom: 10,
+  },
 
 
-acceptRejectContainer: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  marginTop: 8,
-},
-actionBtn: {
-  flex: 1,
+  acceptRejectContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  actionBtn: {
+    flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 16,
     marginHorizontal: 6,
@@ -763,7 +846,7 @@ actionBtn: {
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-},
+  },
   acceptButtonText: {
     color: primaryColor,
     fontWeight: '600',
@@ -816,9 +899,9 @@ actionBtn: {
     color: '#666',
   },
   chatButton: {
-  padding: 8,
-  marginLeft: 10,
-},
+    padding: 8,
+    marginLeft: 10,
+  },
 });
 
 

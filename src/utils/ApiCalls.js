@@ -84,22 +84,6 @@ export const updateCarpoolStatus = async (requestId, status) => {
 };
 
 
-export const addFavourite = async (PassengerID, DriverID) => {
-  const res = await fetch(`${API_URL}/api/favourites`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ PassengerID, DriverID })
-  });
-  return res.json();
-};
-
-export const removeFavourite = async (PassengerID, DriverID) => {
-  const res = await fetch(`${API_URL}/api/favourites/${PassengerID}/${DriverID}`, {
-    method: 'DELETE'
-  });
-  return res.json();
-};
-
 export const submitFeedback = async (feedbackData) => {
   const res = await fetch(`${API_URL}/api/feedback`, {
     method: 'POST',
@@ -118,3 +102,54 @@ export const getFeedbackByRequestId = async (requestId) => {
   }
 };
 
+export const addFavourite = async (passengerId, driverId) => {
+  try {
+    const res = await axios.post(`${API_URL}/api/favourites`, {
+      PassengerID: passengerId,
+      DriverID: driverId,
+      CreatedAt: new Date().toISOString()
+    });
+    return res.data;
+  } catch (error) {
+    console.error("Error adding favourite:", error);
+    return { success: false, message: "Failed to add favourite" };
+  }
+};
+
+export const removeFavourite = async (passengerId, driverId) => {
+  try {
+    const res = await axios.delete(`${API_URL}/api/favourites`, {
+      data: { PassengerID: passengerId, DriverID: driverId }
+    });
+    return res.data;
+  } catch (error) {
+    console.error("Error removing favourite:", error);
+    return { success: false, message: "Failed to remove favourite" };
+  }
+  };
+ 
+  
+export const fetchFavourites = async (passengerId) => {
+  try {
+    if (!passengerId) {
+      console.error("fetchFavourites: passengerId is required");
+      return { 
+        success: false, 
+        message: "passengerId is required",
+        exists: false,
+        favourites: [] 
+      };
+    }
+
+    const res = await axios.get(`${API_URL}/api/favourites/${passengerId}`);
+    return res.data;
+  } catch (err) {
+    console.error("Error fetching favourites:", err);
+    return { 
+      success: false, 
+      message: "Failed to fetch favourites",
+      exists: false,
+      favourites: [] 
+    };
+  }
+};

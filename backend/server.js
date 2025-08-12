@@ -61,6 +61,9 @@ app.use('/api', notificationRoutes);
 //  complaints
 app.use('/api/complaints', require('./routes/complaints'));
 
+//  Favourites
+app.use("/api/favourites", require("./routes/favourites"));
+
 
 
 //  Become Passenger

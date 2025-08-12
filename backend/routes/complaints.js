@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Complaint submitted successfully',
+      message: 'Message submitted successfully',
       complaint: result.rows[0]
     });
   } catch (err) {
