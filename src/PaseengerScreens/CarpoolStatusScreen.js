@@ -12,7 +12,7 @@ import { getCarpoolRequestsByPassenger, deleteCarpoolRequest, updateCarpoolStatu
 import { API_URL } from '../../api';
 import moment from 'moment';
 import { useNavigation } from '@react-navigation/native';
-import { getUserById, getFeedbackByRequestId } from '../utils/ApiCalls';
+import { getUserById, getFeedbackByRequestId, addFavourite, removeFavourite, fetchFavourites } from '../utils/ApiCalls';
 
 const primaryColor = '#D64584';
 const darkGrey = '#333';
@@ -23,6 +23,7 @@ const CarpoolStatusScreen = ({ route }) => {
   const navigation = useNavigation();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+    const [favouriteDrivers, setFavouriteDrivers] = useState([]); // store DriverIDs
   const [selectedTab, setSelectedTab] = useState('upcoming');
   const [rides, setRides] = useState({
     upcoming: [],
@@ -76,6 +77,59 @@ const CarpoolStatusScreen = ({ route }) => {
 
       animateLetter();
     }, []);
+
+
+    // Load favourites when the screen mounts
+ // In your useEffect or wherever you call fetchFavourites
+useEffect(() => {
+  const loadFavourites = async () => {
+    try {
+      if (!passengerId) {
+        console.warn("Cannot fetch favourites - passengerId missing");
+        return;
+      }
+      
+      const res = await fetchFavourites(passengerId);
+      
+      if (res.success) {
+        // Only update state if passenger has favorites
+        if (res.exists) {
+          setFavouriteDrivers(res.favourites || []);
+        } else {
+          // Passenger has no favorites, keep empty array
+          setFavouriteDrivers([]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching favourites:", err);
+    }
+  };
+
+  if (passengerId && selectedTab === 'completed') {
+    loadFavourites();
+  }
+}, [selectedTab, passengerId]);
+
+
+  // Toggle favourite
+  const toggleFavourite = async (driverID) => {
+    try {
+      const isFav = favouriteDrivers.includes(driverID);
+
+      if (isFav) {
+        // Remove from favourites
+        await removeFavourite(passengerId, driverID);
+        setFavouriteDrivers(favouriteDrivers.filter(id => id !== driverID));
+      } else {
+        // Add to favourites
+        await addFavourite(passengerId, driverID);
+        setFavouriteDrivers([...favouriteDrivers, driverID]);
+      }
+    } catch (err) {
+      console.error("Error toggling favourite:", err);
+      Alert.alert("Error", "Could not update favourite");
+    }
+  };
 
 
 
@@ -148,8 +202,11 @@ const CarpoolStatusScreen = ({ route }) => {
     }, [passengerId]);
 
     useEffect(() => {
-      fetchRides();
-    }, []);
+  if (passengerId) {
+    fetchRides();
+    fetchFavourites(passengerId);
+  }
+}, [passengerId]); 
     useEffect(() => {
       if (selectedTab === 'accepted') {
         fetchAcceptedRides(); // fetch only when selected
@@ -531,7 +588,24 @@ const CarpoolStatusScreen = ({ route }) => {
                   {item.VehicleModel || 'No vehicle info'}
                   {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
                 </Text>
+                
               </View>
+
+            {/* Favourite only in completed tab */}
+            {selectedTab === 'completed' && (
+              <TouchableOpacity
+                style={{ marginRight: 8 }}
+                onPress={() => toggleFavourite(item.DriverID)}
+              >
+                <Ionicons
+                  name={favouriteDrivers.includes(item.DriverID) ? "heart" : "heart-outline"}
+                  size={24}
+                  color={favouriteDrivers.includes(item.DriverID) ? "#D64584" : "#999"}
+                />
+              </TouchableOpacity>
+            )}
+
+
 
               {/* Chat only in accepted & upcoming */}
               {(selectedTab === 'accepted' || selectedTab === 'upcoming') && (
