@@ -1,7 +1,13 @@
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';  // ✅ Import LogBox
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import Toast from 'react-native-toast-message'; // ✅ In-app toast
+
+// ✅ Ignore specific warning
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text>'
+]);
 
 // ✅ Notification Setup
 import { registerForPushNotificationsAsync } from './src//utils/NotificationSetup';
