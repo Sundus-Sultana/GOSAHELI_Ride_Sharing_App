@@ -63,6 +63,10 @@ app.use('/api/complaints', require('./routes/complaints'));
 
 //  Favourites
 app.use("/api/favourites", require("./routes/favourites"));
+const favouriteDetailsRouter = require('./routes/favouriteDetails');
+
+app.use('/favourites', favouriteDetailsRouter); 
+
 
 
 

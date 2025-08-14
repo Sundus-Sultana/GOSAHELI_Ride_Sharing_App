@@ -1,189 +1,410 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome'; // Make sure to install this package
+// favouriteDetails.js
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, StyleSheet, Image, ActivityIndicator, Alert, Animated, Platform
+} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { TouchableOpacity, FlatList } from 'react-native-gesture-handler';
+import axios from 'axios';
+import { API_URL } from '../../api';
+import { removeFavourite } from '../utils/ApiCalls';
+import { Rating } from 'react-native-ratings';
 
-const Favourite = () => {
-  // Initial driver data
-  const initialDrivers = [
-    {
-      id: '1',
-      name: 'Sundus Sultana',
-      rating: 4.9,
-      rides: 1245,
-      carModel: 'Legender',
-      carNumber: 'ICT 1234',
-      avatar: require('../../assets/driver1.jpg'),
-    },
-    {
-      id: '2',
-      name: 'Atiqa Din',
-      rating: 4.8,
-      rides: 982,
-      carModel: 'Fortuner',
-      carNumber: 'ICT 5678',
-      avatar: require('../../assets/driver2.jpg'),
-    },
-  ];
+export default function Favourite({ route, navigation }) {
+  const passengerId = route?.params?.passengerId;
+  const [favourites, setFavourites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useState(new Animated.Value(0))[0];
 
-  const [favoriteDrivers, setFavoriteDrivers] = useState(initialDrivers);
+  useEffect(() => {
+    fetchFavourites();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, [passengerId]);
 
-  const removeDriver = (id) => {
-    setFavoriteDrivers(favoriteDrivers.filter(driver => driver.id !== id));
+  const fetchFavourites = async () => {
+    try {
+      const res = await axios.get(
+        `${API_URL}/favourites/passenger/${passengerId}/details`
+      );
+      if (res.data.success) {
+        setFavourites(res.data.favourites);
+      } else {
+        setFavourites([]);
+      }
+    } catch (err) {
+      console.error('Error fetching favourites:', err);
+      Alert.alert('Error', 'Could not load favourites');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const renderDriverItem = ({ item }) => (
-    <View style={styles.driverCard}>
-      {/* Heart icon in top right corner */}
-      <TouchableOpacity 
-        style={styles.heartIcon}
-        onPress={() => removeDriver(item.id)}
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchFavourites();
+  };
+
+  const handleRemoveFavourite = async (driverId) => {
+    Alert.alert(
+      'Remove Favourite',
+      'Are you sure you want to remove this driver from favourites?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          onPress: async () => {
+            const prevList = [...favourites];
+            const updatedList = favourites.filter(fav => fav.DriverID !== driverId);
+            setFavourites(updatedList);
+            
+            const result = await removeFavourite(passengerId, driverId);
+            if (!result.success) {
+              Alert.alert('Error', 'Failed to remove favourite');
+              setFavourites(prevList);
+            } else {
+              // Show success feedback
+              Animated.sequence([
+                Animated.timing(fadeAnim, {
+                  toValue: 0.5,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                  toValue: 1,
+                  duration: 200,
+                  useNativeDriver: true,
+                }),
+              ]).start();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = (progress, dragX, driverId) => {
+    const scale = dragX.interpolate({
+      inputRange: [-100, 0],
+      outputRange: [1, 0.9],
+      extrapolate: 'clamp',
+    });
+    
+    return (
+      <TouchableOpacity
+        style={styles.removeButton}
+        onPress={() => handleRemoveFavourite(driverId)}
       >
-        <Icon name="heart" size={20} color="#FF3B30" />
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <MaterialIcons name="delete" size={28} color="white" />
+          <Text style={styles.removeText}>Remove</Text>
+        </Animated.View>
       </TouchableOpacity>
-      
-      <View style={styles.driverInfo}>
-        <Image 
-          source={item.avatar} 
-          style={styles.avatar}
-          onError={() => console.log("Error loading image")}
-        />
-        <View style={styles.driverDetails}>
-          <Text style={styles.driverName}>{item.name}</Text>
-          <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>{item.rating} ★</Text>
-            <Text style={styles.ridesText}>{item.rides} rides</Text>
+    );
+  };
+
+  const renderItem = ({ item, index }) => (
+    <Animated.View
+      style={{
+        opacity: fadeAnim,
+        transform: [
+          {
+            translateY: fadeAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [50 * (index + 1), 0],
+            }),
+          },
+        ],
+      }}
+    >
+      <Swipeable
+        renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item.DriverID)}
+        friction={2}
+        rightThreshold={40}
+      >
+        <View style={styles.card}>
+          <Image
+            source={
+              item.photo_url
+                ? { uri: item.photo_url.startsWith('/uploads')
+                    ? `${API_URL}${item.photo_url}`
+                    : `${API_URL}/uploads/${item.photo_url}`
+                  }
+                : require('../../assets/empty_avatar.jpg')
+            }
+            style={styles.avatar}
+          />
+          <View style={styles.info}>
+            <View style={styles.nameContainer}>
+              <Text style={styles.name} numberOfLines={1}>{item.username}</Text>
+              {item.IsRecentlyRated && (
+                <View style={styles.recentBadge}>
+                  <Text style={styles.recentBadgeText}>Recent</Text>
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.vehicleInfo}>
+              <Ionicons name="car-sport" size={16} color="#666" />
+              <Text style={styles.vehicle}>
+                {item.color} {item.VehicleModel}
+              </Text>
+            </View>
+            
+            <View style={styles.plateContainer}>
+              <MaterialIcons name="confirmation-number" size={16} color="#666" />
+              <Text style={styles.plate}>{item.PlateNumber}</Text>
+            </View>
+            
+            <View style={styles.ratingContainer}>
+              <Rating
+                type="star"
+                ratingCount={5}
+                imageSize={18}
+                readonly
+                startingValue={item.Rating || 0}
+                style={styles.ratingStars}
+              />
+              <Text style={styles.ratingText}>
+                {typeof item.Rating === 'number' ? item.Rating.toFixed(1) : 'N/A'}
+                {item.RatingCount > 0 && ` (${item.RatingCount})`}
+              </Text>
+            </View>
           </View>
-          <Text style={styles.carInfo}>{item.carModel} • {item.carNumber}</Text>
         </View>
-      </View>
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
-          style={styles.removeButton}
-          onPress={() => removeDriver(item.id)}
-        >
-          <Text style={styles.removeButtonText}>Remove</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      </Swipeable>
+    </Animated.View>
   );
 
   return (
-    <View style={styles.container}>
-      {favoriteDrivers.length > 0 ? (
-        <FlatList
-          data={favoriteDrivers}
-          renderItem={renderDriverItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContainer}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No favorite drivers yet</Text>
-          <Text style={styles.emptySubText}>Your favorite drivers will appear here</Text>
+    <SafeAreaView style={styles.safeArea}>
+      {/* Header with gradient */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={28} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.headerText}>My Favourite Drivers</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      {/* List with refresh control */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#d63384" />
+          <Text style={styles.loadingText}>Loading your favourites...</Text>
         </View>
+      ) : (
+        <Animated.FlatList
+          data={favourites}
+          keyExtractor={(item) => item.DriverID.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="heart-dislike" size={60} color="#d1d1d1" />
+              <Text style={styles.emptyTitle}>No Favourites Yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Your favourite drivers will appear here
+              </Text>
+            </View>
+          }
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
       )}
-    </View>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
-    padding: 15,
+    backgroundColor: '#f8f9fa',
   },
-  listContainer: {
-    paddingBottom: 20,
-  },
-  driverCard: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  heartIcon: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    zIndex: 1,
-  },
-  driverInfo: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'space-between',
+    backgroundColor: '#d63384',
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: 'white',
+    textAlign: 'center',
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  headerRight: {
+    width: 36, // Balance the header layout
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: '#666',
+    fontSize: 16,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   avatar: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    marginRight: 15,
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
   },
-  driverDetails: {
+  info: {
     flex: 1,
+    justifyContent: 'center',
   },
-  driverName: {
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  name: {
+    fontWeight: '600',
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
     color: '#333',
+    flexShrink: 1,
+  },
+  recentBadge: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  recentBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  vehicle: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 6,
+  },
+  plateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  plate: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 6,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+  },
+  ratingStars: {
+    alignSelf: 'flex-start',
+    marginRight: 8,
   },
   ratingText: {
-    fontSize: 14,
-    color: '#FFD700',
-    marginRight: 10,
-  },
-  ridesText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  carInfo: {
-    fontSize: 14,
-    color: '#666',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end', // Changed to flex-end since we only have remove button
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 15,
+    color: '#d63384',
+    fontWeight: '600',
+    fontSize: 16,
   },
   removeButton: {
-    backgroundColor: '#d63384',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
+    backgroundColor: '#ff4444',
+    justifyContent: 'center',
     alignItems: 'center',
+    width: 80,
+    height: '80%',
+    borderRadius: 12,
+    marginTop: 10,
+    marginRight: 8,
   },
-  removeButtonText: {
+  removeText: {
     color: 'white',
     fontWeight: 'bold',
+    marginTop: 4,
+    fontSize: 12,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 40,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#555',
+    marginTop: 16,
   },
-  emptySubText: {
-    fontSize: 14,
-    color: '#666',
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#888',
+    marginTop: 8,
     textAlign: 'center',
   },
+  separator: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginVertical: 4,
+  },
 });
-
-export default Favourite;

@@ -88,9 +88,12 @@ const Home = ({ route }) => {
     try {
       const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
       if (response.data.passenger?.PassengerID) {
-        setPassengerId(response.data.passenger.PassengerID);
-        console.log("PassengerID set in state:", response.data.passenger.PassengerID);
-      }
+      const passengerId = response.data.passenger.PassengerID;
+      setPassengerId(passengerId);
+      console.log("PassengerID set in state:", passengerId);
+      return passengerId;
+    }
+    return null;
     } catch (error) {
     if (error.response && error.response.status === 404) {
         // Passenger record not found — expected, so do nothing or just console log
@@ -480,7 +483,17 @@ const fetchPassengerIdAndNavigateToSupport = async () => {
           <MaterialIcons name="home" size={25} color="#d63384" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
+        <TouchableOpacity style={styles.navItem} onPress={() => {
+    if (passengerId) {
+      navigation.navigate('Favourite', { 
+        passengerId: passengerId,
+        userId: userId,
+        userName: userName 
+      });
+    } else {
+      Alert.alert("Info", "Please wait while we load your passenger information");
+    }
+  }}>
           <MaterialIcons name="favorite-border" size={25} color="#888" />
           <Text style={styles.navText}>Favorites</Text>
         </TouchableOpacity>
