@@ -88,7 +88,7 @@ useEffect(() => {
           <Stack.Screen name="ChatUI" component={ChatUI} options={{ headerShown: false }} />
           <Stack.Screen name="History" component={History} />
           <Stack.Screen name="Favourite" component={Favourite} options={{ headerShown: false }}/>
-          <Stack.Screen name="Offers" component={Offers} />
+          <Stack.Screen name="Offers" component={Offers}options={{ headerShown: false }} />
           <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
           <Stack.Screen name="about" component={about} />
           <Stack.Screen name="Support" component={Support}options={{ headerShown: false }} />
