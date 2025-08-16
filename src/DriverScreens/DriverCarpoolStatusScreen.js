@@ -165,6 +165,8 @@ const handleAccept = async (requestId) => {
         text: "Accept",
         onPress: async () => {
           try {
+            // First get passenger details before accepting
+            const passengerData = await getPassengerUserIdFromRequest(requestId);
             const acceptRes = await axios.post(`${API_URL}/api/driver/carpool/accept-request`, {
               requestId,
               driverId
@@ -172,6 +174,12 @@ const handleAccept = async (requestId) => {
 
             if (acceptRes.data.success) {
               ToastAndroid.show('Request Accepted', ToastAndroid.SHORT);
+              // ✅ Save in backend DB (Notification table)
+    await axios.post(`${API_URL}/api/save-notification`, {
+      userId,
+      type: 'Carpool Request Accepted',
+                message: `Accepted Carpool Request for ${passengerData?.username || 'Passenger'}`
+    });
 
               // ✅ Only call once
               try {
@@ -303,14 +311,55 @@ useEffect(() => {
         axios.get(`${API_URL}/api/driver/carpool/upcoming-requests/${driverId}`),
         axios.get(`${API_URL}/api/driver/carpool/completed-requests/${driverId}`)
       ]);
+    // Function to add passenger names to requests
+    const addPassengerNames = async (requests) => {
+      if (!requests || requests.length === 0) return requests;
+      
+      const requestsWithNames = await Promise.all(
+        requests.map(async (request) => {
+          try {
+            const passengerData = await getPassengerUserIdFromRequest(request.RequestID);
+            return {
+              ...request,
+              passengerName: passengerData?.username || "Passenger"
+            };
+          } catch (error) {
+            console.error('Error fetching passenger name:', error);
+            return {
+              ...request,
+              passengerName: "Passenger"
+            };
+          }
+        })
+      );
+      return requestsWithNames;
+    };
 
-      setMatchedRequests(matchedRes.data?.matched || []);
-      setAllPendingRequests(pendingRes.data?.allPending || []);
-      setAcceptedRequests(acceptedRes.data?.accepted || []);
-      setRejectedRequests(rejectedRes.data?.rejected || []);
-      console.log('Upcoming API Response:', upcomingRes.data); 
-      setUpcomingRequests(upcomingRes.data?.upcoming || []);
-      setCompletedRequests(completedRes.data?.completed || []);
+    // Process all request types in parallel
+    const [
+      matchedWithNames,
+      pendingWithNames,
+      acceptedWithNames,
+      rejectedWithNames,
+      upcomingWithNames,
+      completedWithNames
+    ] = await Promise.all([
+      addPassengerNames(matchedRes.data?.matched),
+      addPassengerNames(pendingRes.data?.allPending),
+      addPassengerNames(acceptedRes.data?.accepted),
+      addPassengerNames(rejectedRes.data?.rejected),
+      addPassengerNames(upcomingRes.data?.upcoming),
+      addPassengerNames(completedRes.data?.completed)
+    ]);
+
+    // Update state with enriched data
+    setMatchedRequests(matchedWithNames || []);
+    setAllPendingRequests(pendingWithNames || []);
+    setAcceptedRequests(acceptedWithNames || []);
+    setRejectedRequests(rejectedWithNames || []);
+    setUpcomingRequests(upcomingWithNames || []);
+    setCompletedRequests(completedWithNames || []);
+
 
     } catch (e) {
       console.error('Error fetching requests:', e);
@@ -352,10 +401,12 @@ useEffect(() => {
 
 
 const renderRequestCard = (item, key, isMatched = false, tabContext = 'Requests') => {
+  
   const formattedDate = formatDate(item.date);
   const pickupTime = formatTime(item.pickup_time);
   const dropoffTime = formatTime(item.dropoff_time);
   const routeType = (item.route_type || '').toLowerCase(); // "one way" or "two way"
+  
 
   const specialReq = item.special_requests;
   const luggage = item.allows_luggage;
@@ -459,6 +510,11 @@ const renderRequestCard = (item, key, isMatched = false, tabContext = 'Requests'
             {item.seats}
             <Ionicons name="woman" size={20} color={primaryColor} style={{ marginLeft: 4 }} />
           </Text>
+          {item.passengerName && (
+            <Text style={{ marginLeft: 8, color: darkGrey }}>
+              ({item.passengerName})
+            </Text>
+          )}
         </Text>
       </View>
 
@@ -558,13 +614,13 @@ const renderRequestCard = (item, key, isMatched = false, tabContext = 'Requests'
             >Awaiting Passenger</Text>
           </TouchableOpacity>
 
-          {/* Active Reject Button */}
+          {/* Active Reject Button 
           <TouchableOpacity
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => handleReject(item.RequestID)}
           >
             <Text style={styles.rejectButtonText}>Reject</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>*/}
         </View>
       )}
 

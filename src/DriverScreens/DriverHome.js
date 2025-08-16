@@ -50,35 +50,41 @@ const DriverHome = ({ route }) => {
   };
 
   // Add this helper function to format time to PKT
-const formatToPktTime = (dateTimeString) => {
-  if (!dateTimeString) return "Just now";
+const formatToPktTime  = (timestamp) => {
+  if (!timestamp) return 'Just now';
   
-  try {
-    const date = new Date(dateTimeString);
-    // Convert to PKT (UTC+5)
-    const pktDate = new Date(date.getTime() + (5 * 60 * 60 * 1000));
+  const now = new Date();
+  const pastDate = new Date(timestamp);
+  const seconds = Math.floor((now - pastDate) / 1000);
+  
+  // Within last 24 hours
+  if (seconds < 86400) {
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
     
-    const now = new Date();
-    const diffInSeconds = Math.floor((now - pktDate) / 1000);
-    
-    // Show relative time if recent
-    if (diffInSeconds < 60) return "Just now";
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    
-    // Show exact time if older than a day
-    return pktDate.toLocaleString("en-PK", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch (e) {
-    return dateTimeString;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   }
+  
+  // Between 24-48 hours ago
+  if (seconds < 172800) {
+    return 'Yesterday';
+  }
+  
+  // 2-6 days ago
+  if (seconds < 604800) {
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  }
+  
+  // More than 1 week ago - show actual date
+  return pastDate.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
 };
-
 
 // Add this state to the component
 const [notificationVisible, setNotificationVisible] = useState(false);
