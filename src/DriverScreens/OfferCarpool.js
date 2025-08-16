@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect,useCallback } from 'react';
 import {
   View,
   Text,
@@ -52,7 +52,11 @@ export default function OfferCarpool({ navigation, route }) {
     }
   };
 
-
+// Fetch user data immediately when component mounts
+  useEffect(() => {
+    fetchUserData();
+    loadUserPhoto();
+  }, [userId]);
 
   useFocusEffect(
       React.useCallback(() => {
@@ -164,16 +168,106 @@ export default function OfferCarpool({ navigation, route }) {
     }
   };
 
-  const handleRegisterRoute = () => {
-    if (!photoURL) {
+const handleRegisterRoute = async () => {
+  // 1. Check profile photo
+  if (!photoURL) {
+    Alert.alert(
+      'Profile Photo Required',
+      'Please upload your profile photo before registering your route.'
+    );
+    return;
+  }
+
+  try {
+    // 2. Check vehicle information
+    const vehicleData = await getVehicleByDriverId(driverId);
+    
+    if (!vehicleData || Object.keys(vehicleData).length === 0) {
       Alert.alert(
-        'Profile Photo Required',
-        'Please upload your profile photo before registering your route.'
+        'Vehicle Information Required',
+        'Please complete your vehicle registration before creating a route.'
       );
       return;
     }
-    navigation.navigate('DriverCarpoolMap', { userId ,driverId});
-  };
+
+    // Define required fields with user-friendly names
+    const requiredFields = {
+      'VehicleID': 'Vehicle ID',
+      'VehicleModel': 'Vehicle Model',
+      'VehicleType': 'Vehicle Type',
+      'capacity': 'Passengers Capacity',
+      'color': 'Vehicle Color',
+      'PlateNumber': 'License Plate Number',
+      'vehicle_url': 'Vehicle Image (Your front side and number plate should be clearly visible)',
+      'license_front_url': 'License Front Image',
+      'license_back_url': 'License Back Image'
+    };
+
+    // Check for missing fields
+    const missingFields = Object.entries(requiredFields)
+      .filter(([field]) => !vehicleData[field])
+      .map(([_, friendlyName]) => friendlyName);
+    
+    if (missingFields.length > 0) {
+      Alert.alert(
+        'Incomplete Vehicle Information',
+        `Please complete the following vehicle details:\n\n• ${missingFields.join('\n• ')}`
+      );
+      return;
+    }
+
+    // 3. Check driver approval status
+    const driverData = await getDriverById(userId);
+    
+    if (!driverData) {
+      Alert.alert(
+        'Driver Registration Incomplete',
+        'We could not find your driver registration.\n\nPlease complete your driver profile first.'
+      );
+      return;
+    }
+
+    // Handle driver status
+    switch(driverData.status.toLowerCase()) {
+      case 'pending':
+        Alert.alert(
+          'Approval Pending',
+          'Your driver application is under review.\n\nWe typically complete reviews within 2-3 business days.\n\nYou will receive a notification when approved.'
+        );
+        return;
+      
+      case 'rejected':
+        Alert.alert(
+          'Application Not Approved',
+          `Your driver application was not approved at this time.\n\nReason: ${driverData.rejection_reason || 'Not specified'}\n\nPlease contact support if you have questions.`
+        );
+        return;
+      
+      case 'accepted':
+        // All checks passed - navigate to route registration
+        navigation.navigate('DriverCarpoolMap', { 
+          userId, 
+          driverId,
+          vehicleData // Pass vehicle data to the next screen
+        });
+        return;
+      
+      default:
+        Alert.alert(
+          'Verification Status Unknown',
+          'We couldn\'t determine your approval status.\n\nPlease contact support for assistance.'
+        );
+        return;
+    }
+
+  } catch (error) {
+    console.error('Error during verification:', error);
+    Alert.alert(
+      'Verification Error',
+      'Failed to verify your information. Please try again.'
+    );
+  }
+};
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

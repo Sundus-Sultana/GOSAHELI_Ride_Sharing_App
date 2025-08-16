@@ -8,6 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
+import { Rating } from 'react-native-ratings';
 import { getCarpoolRequestsByPassenger, deleteCarpoolRequest, updateCarpoolStatus } from '../utils/ApiCalls';
 import { API_URL } from '../../api';
 import moment from 'moment';
@@ -18,8 +19,7 @@ const primaryColor = '#D64584';
 const darkGrey = '#333';
 
 const CarpoolStatusScreen = ({ route }) => {
-  const { userId, passengerId, price } = route.params || {};
-  console.log("Price:", price);
+  const { userId, passengerId } = route.params || {};
   const navigation = useNavigation();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -105,7 +105,7 @@ useEffect(() => {
     }
   };
 
-  if (passengerId && selectedTab === 'completed') {
+  if (passengerId && selectedTab === 'completed'|| selectedTab === 'accepted') {
     loadFavourites();
   }
 }, [selectedTab, passengerId]);
@@ -466,6 +466,7 @@ useEffect(() => {
     };
 
     const renderCard = ({ item }) => {
+    
       const formattedDate = moment(item.date).format('DD-MM-YYYY');
       const pickupTime = moment(item.pickup_time, 'HH:mm:ss').format('hh:mm A');
       const dropoffTime = item.dropoff_time ? moment(item.dropoff_time, 'HH:mm:ss').format('hh:mm A') : null;
@@ -587,25 +588,63 @@ useEffect(() => {
                   {item.color ? `${item.color} ` : ''}
                   {item.VehicleModel || 'No vehicle info'}
                   {item.PlateNumber ? ` (${item.PlateNumber})` : ''}
-                </Text>
+                 </Text>
+ <View style={styles.ratingContainer}>
+      <Rating
+  type="star"
+  ratingCount={5}
+  imageSize={12}
+  readonly
+  startingValue={Number(item.Rating ?? 4.5)} 
+  style={styles.ratingStars}
+/>
+<Text style={styles.ratingText}>
+  {Number(item.Rating ?? 4.5).toFixed(1)} {/* Convert to number first */}
+  {item.RatingCount > 0 && ` (${item.RatingCount})`}
+</Text>
+            </View>
+               
                 
               </View>
 
-            {/* Favourite only in completed tab */}
-            {selectedTab === 'completed' && (
-              <TouchableOpacity
-                style={{ marginRight: 8 }}
-                onPress={() => toggleFavourite(item.DriverID)}
-              >
-                <Ionicons
-                  name={favouriteDrivers.includes(item.DriverID) ? "heart" : "heart-outline"}
-                  size={24}
-                  color={favouriteDrivers.includes(item.DriverID) ? "#D64584" : "#999"}
-                />
-              </TouchableOpacity>
-            )}
+           {/* Favourite in completed tab (original position) */}
+    {selectedTab === 'completed' && (
+      <TouchableOpacity
+        style={{ marginRight: 8,
+    backgroundColor: '#fff', // white circle behind for contrast
+    padding: 6,
+    borderRadius: 30,
+    // iOS shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    // Android shadow
+    elevation: 5,}}
+        onPress={() => toggleFavourite(item.DriverID)}
+      >
+        <Ionicons
+          name={favouriteDrivers.includes(item.DriverID) ? "heart" : "heart-outline"}
+          size={24}
+          color={favouriteDrivers.includes(item.DriverID) ? "#e40000ff" : "#999"}
+        />
+      </TouchableOpacity>
+    )}
 
-
+    {/* Favourite in accepted tab (new position - top right) */}
+    {selectedTab === 'accepted' && (
+      <View style={{ 
+        position: 'absolute', 
+        top: 10, 
+        right: 10 
+      }}>
+        <Ionicons
+          name={favouriteDrivers.includes(item.DriverID) ? "heart" : "heart-outline"}
+          size={20}
+          color={favouriteDrivers.includes(item.DriverID) ? "#e40000ff" : "#ccc"}
+        />
+      </View>
+    )}
 
               {/* Chat only in accepted & upcoming */}
               {(selectedTab === 'accepted' || selectedTab === 'upcoming') && (
@@ -963,6 +1002,19 @@ useEffect(() => {
       fontSize: 14,
       color: '#666',
     },
+    ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingStars: {
+    alignSelf: 'flex-start',
+    marginRight: 8,
+  },
+  ratingText: {
+    color: '#d63384',
+    fontWeight: '600',
+    fontSize: 16,
+  },
     chatButton: {
       padding: 8,
       marginLeft: 10,

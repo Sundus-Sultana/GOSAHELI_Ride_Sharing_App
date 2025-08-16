@@ -362,10 +362,39 @@ useEffect(() => {
             <MaterialIcons name="home" size={25} color="#d63384" />
             <Text style={styles.navText}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
-            <MaterialIcons name="favorite-border" size={25} color="#888" />
-            <Text style={styles.navText}>Favorites</Text>
-          </TouchableOpacity>
+          {/* My Rides (Updated) */}
+  <TouchableOpacity 
+    style={styles.navItem} 
+               onPress={() => navigation.navigate('DriverCarpoolStatusScreen',{
+               userId: userId,
+                driverId: driver?.DriverID, 
+               })}>
+
+    <View style={{ position: 'relative' }}>
+      <MaterialIcons name="directions-car" size={25} color="#888" />
+      {/* Status dots (⚪⚪⚪) */}
+      <View style={{
+        position: 'absolute',
+        top: -3,
+        right: -8,
+        flexDirection: 'row'
+      }}>
+        {[1, 2, 3].map((item) => (
+          <View 
+            key={item}
+            style={{
+              width: 4,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: '#888',
+              marginHorizontal: 1
+            }}
+          />
+        ))}
+      </View>
+    </View>
+    <Text style={styles.navText}>My Rides</Text>
+  </TouchableOpacity>
 
           <View style={styles.navItem}></View>
 

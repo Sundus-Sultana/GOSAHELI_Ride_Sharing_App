@@ -296,11 +296,39 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
 // ✅ Get all carpool requests for a passenger
 router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
   const { passengerId } = req.params;
+  console.log("🔍 Received PassengerID:", passengerId);
 
-  console.log("🔍 Received PassengerID:", passengerId); // Debug log
-
- try {
+  try {
     const query = `
+ WITH driver_ratings AS (
+  SELECT 
+    fe."DriverID",
+    fe."RateValue",
+    fe."CreatedAt",
+    EXP(-0.1 * EXTRACT(DAY FROM (NOW() - fe."CreatedAt"))) AS time_weight
+  FROM "Feedback" fe
+  WHERE fe."DriverID" IS NOT NULL
+),
+rating_summary AS (
+  SELECT
+    d."DriverID",
+    COALESCE(
+  ROUND(
+    CASE 
+      WHEN SUM(dr.time_weight) > 0
+      THEN SUM(dr."RateValue" * dr.time_weight) / SUM(dr.time_weight)
+      ELSE 4.5
+    END, 1
+  ),
+  4.5
+) AS "WeightedRating",
+
+    COUNT(dr."RateValue") AS "RatingCount"
+  FROM "Driver" d
+  LEFT JOIN driver_ratings dr ON d."DriverID" = dr."DriverID"
+  GROUP BY d."DriverID"
+)
+      
       SELECT
         crs."RequestID",
         crs.date,
@@ -323,51 +351,57 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
         u.photo_url AS driver_photo,
         v."VehicleModel",
         v."PlateNumber",
-        v.color
-    FROM "Carpool_Request_Status" crs
-LEFT JOIN "Driver" d ON crs."DriverID" = d."DriverID"
-LEFT JOIN "User" u ON d."UserID" = u."UserID"
-LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
-WHERE crs."PassengerID" = $1
-ORDER BY crs.date ASC;
+        v.color,
+        rs."WeightedRating" AS "Rating",
+        rs."RatingCount"
+      FROM "Carpool_Request_Status" crs
+      LEFT JOIN "Driver" d ON crs."DriverID" = d."DriverID"
+      LEFT JOIN "User" u ON d."UserID" = u."UserID"
+      LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
+      LEFT JOIN rating_summary rs ON d."DriverID" = rs."DriverID"
+      WHERE crs."PassengerID" = $1
+      ORDER BY crs.date ASC;
     `;
 
     const { rows } = await client.query(query, [passengerId]);
 
-  // Then after fetching rows:
-const categorized = {
-  pending: [],
-  accepted: [],
-  upcoming: [],
-  completed: [],
-  rejected: []
-};
+    const categorized = {
+      pending: [],
+      accepted: [],
+      upcoming: [],
+      completed: [],
+      rejected: []
+    };
 
     rows.forEach(ride => {
-  const status = (ride.status || '').toLowerCase();
+      const status = (ride.status || '').toLowerCase();
 
-  if (status === 'pending') {
-    // clear driver info for pending rides (no driver yet)
-    ride.driver_user_id = null;
-    ride.driver_name = null;
-    ride.driver_photo = null;
-    ride.VehicleModel = null;
-    ride.PlateNumber = null;
-    ride.color = null;
-  }
+      if (status === 'pending') {
+        ride.driver_user_id = null;
+        ride.driver_name = null;
+        ride.driver_photo = null;
+        ride.VehicleModel = null;
+        ride.PlateNumber = null;
+        ride.color = null;
+        ride.Rating = null;
+        ride.RatingCount = null;
+      }
 
-  if (status === 'pending') categorized.pending.push(ride);
-  else if (status === 'accepted') categorized.accepted.push(ride);
-  else if (status === 'joined') categorized.upcoming.push(ride);
-  else if (status === 'completed') categorized.completed.push(ride);
-  else if (status === 'rejected') categorized.rejected.push(ride);
-});
+      if (status === 'pending') categorized.pending.push(ride);
+      else if (status === 'accepted') categorized.accepted.push(ride);
+      else if (status === 'joined') categorized.upcoming.push(ride);
+      else if (status === 'completed') categorized.completed.push(ride);
+      else if (status === 'rejected') categorized.rejected.push(ride);
+    });
+
     res.status(200).json({ success: true, data: categorized });
+
   } catch (err) {
     console.error("Error fetching all rides:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // PATCH /api/carpool/update-status/:requestId
 router.patch('/update-status/:requestId', async (req, res) => {
