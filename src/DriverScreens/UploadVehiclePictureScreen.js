@@ -146,9 +146,16 @@ const UploadVehiclePictureScreen = ({ route }) => {
         {imageUri ? (
           <>
             <Image source={{ uri: imageUri }} style={styles.uploadedImage} />
-            <TouchableOpacity style={styles.editIcon} onPress={() => setIsEditMode(true)}>
-              <MaterialIcons name="edit" size={24} color="#fff" />
-            </TouchableOpacity>
+           <TouchableOpacity 
+  style={styles.editIcon} 
+  onPress={() => {
+    setIsEditMode(true);
+    handleImagePick();   // 👈 open picker immediately
+  }}
+>
+  <MaterialIcons name="edit" size={24} color="#fff" />
+</TouchableOpacity>
+
             <TouchableOpacity style={styles.deleteIcon} onPress={handleDeleteImage}>
               <MaterialIcons name="delete" size={24} color="#fff" />
             </TouchableOpacity>

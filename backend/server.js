@@ -57,6 +57,8 @@ app.use('/api/feedback', feedbackRoute);
 //  notification
 const notificationRoutes = require('./routes/notifications'); // adjust path if needed
 app.use('/api', notificationRoutes);
+const notificationsRouter = require('./routes/notifications');
+app.use('/api/notifications', notificationsRouter);
 
 //  complaints
 app.use('/api/complaints', require('./routes/complaints'));
@@ -241,10 +243,11 @@ app.get('/user-by-id/:userId', async (req, res) => {
 app.get('/driver-by-user-id/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
-    const result = await client.query('SELECT "DriverID" FROM "Driver" WHERE "UserID" = $1', [userId]);
+    const result = await client.query('SELECT "DriverID","status" FROM "Driver" WHERE "UserID" = $1', [userId]);
 
     if (result.rows.length > 0) {
-      res.json({ DriverID: result.rows[0].DriverID });
+      const { DriverID, status } = result.rows[0];
+      res.json({ DriverID, status });
     } else {
       res.status(404).json({ message: 'Driver not found' });
     }

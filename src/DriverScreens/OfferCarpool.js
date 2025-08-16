@@ -17,7 +17,7 @@ import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { uploadProfilePhoto, getUserPhoto, getVehicleByDriverId, API_URL } from '../../api';
+import { uploadProfilePhoto, getUserPhoto, getVehicleByDriverId, API_URL ,getDriverById} from '../../api';
 
 export default function OfferCarpool({ navigation, route }) {
   const userId = route?.params?.userId;
@@ -218,7 +218,8 @@ const handleRegisterRoute = async () => {
 
     // 3. Check driver approval status
     const driverData = await getDriverById(userId);
-    
+    console.log("Driver data:", driverData);
+
     if (!driverData) {
       Alert.alert(
         'Driver Registration Incomplete',

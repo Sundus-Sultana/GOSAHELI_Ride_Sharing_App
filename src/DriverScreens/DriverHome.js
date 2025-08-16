@@ -22,6 +22,8 @@ import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import DriverMenuOverlay from "../components/DriverMenuOverlay"; // ✅ Correct import name
 import { auth } from "../firebase/setup";
 import { getRideHistory, getUser, getDriverById } from "../../api.js";
+import { getNotifications, markNotificationsAsRead } from "../utils/ApiCalls.js";
+
 import SaheliLogo from "../../assets/IconWomen2.png";
 import { registerForPushNotificationsAsync } from '../utils/NotificationSetup'; // Adjust path if needed
 // Add at the top with other imports
@@ -47,8 +49,78 @@ const DriverHome = ({ route }) => {
     return `PKR ${amount.toLocaleString("en-PK")}`;
   };
 
+  // Add this helper function to format time to PKT
+const formatToPktTime = (dateTimeString) => {
+  if (!dateTimeString) return "Just now";
+  
+  try {
+    const date = new Date(dateTimeString);
+    // Convert to PKT (UTC+5)
+    const pktDate = new Date(date.getTime() + (5 * 60 * 60 * 1000));
+    
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - pktDate) / 1000);
+    
+    // Show relative time if recent
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    
+    // Show exact time if older than a day
+    return pktDate.toLocaleString("en-PK", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch (e) {
+    return dateTimeString;
+  }
+};
 
 
+// Add this state to the component
+const [notificationVisible, setNotificationVisible] = useState(false);
+const [notifications, setNotifications] = useState([]);
+const [unreadCount, setUnreadCount] = useState(0);
+
+// Add this useEffect to fetch notifications
+useEffect(() => {
+  const fetchNotifications = async () => {
+    if (!userId) 
+    return;
+    try {
+          console.log('Fetching notifications for user:', userId);
+      const notifs = await getNotifications(userId);
+    console.log('Notifications received:', notifs);
+
+      setNotifications(notifs);
+      const unread = notifs.filter(n => !n.isRead).length;
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+  
+  fetchNotifications();
+}, [userId, notificationVisible]); // Refresh when notification overlay opens/closes
+
+const handleNotificationPress = async () => {
+  setNotificationVisible(true);
+  if (unreadCount > 0) {
+          console.log('Marking notifications as read for user:', userId);
+
+    try {
+      await markNotificationsAsRead(userId);
+      setUnreadCount(0);
+      // Update local notifications to mark as read
+      setNotifications(notifs => notifs.map(n => ({...n, isRead: true})));
+    } catch (err) {
+      console.error("Error marking notifications as read:", err);
+    }
+  }
+};
 
  useEffect(() => {
   const fetchDriver = async () => {
@@ -202,6 +274,20 @@ useEffect(() => {
             <FontAwesome5 name="arrow-left" size={24} color="white" />
             <Text style={styles.backText}>Saheli</Text>
           </TouchableOpacity>
+          <View style={styles.headerIcons}>
+    <TouchableOpacity 
+      onPress={handleNotificationPress}
+      style={styles.notificationButton}
+    >
+      <MaterialIcons name="notifications" size={26} color="white" />
+      {unreadCount > 0 && (
+        <View style={styles.notificationBadge}>
+          <Text style={styles.notificationBadgeText}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
               console.log("Menu opened");
@@ -210,6 +296,7 @@ useEffect(() => {
           >
             <MaterialIcons name="menu" size={30} color="white" />
           </TouchableOpacity>
+        </View>
         </View>
 
         {/* Menu Overlay (render always, handle inside) */}
@@ -324,6 +411,67 @@ useEffect(() => {
             scrollEnabled={false}
           />
         </View>
+
+        // Add the NotificationOverlay component (place this near the DriverMenuOverlay)
+<Modal
+  transparent
+  visible={notificationVisible}
+  animationType="fade"
+  onRequestClose={() => setNotificationVisible(false)}
+>
+  <View style={styles.notificationOverlay}>
+    <View style={styles.notificationContainer}>
+      <View style={styles.notificationHeader}>
+        <Text style={styles.notificationTitle}>Notifications</Text>
+        <TouchableOpacity 
+          onPress={() => setNotificationVisible(false)}
+          style={styles.closeButton}
+        >
+          <MaterialIcons name="close" size={24} color="#d63384" />
+        </TouchableOpacity>
+      </View>
+      
+      {notifications.length === 0 ? (
+        <View style={styles.noNotifications}>
+          <MaterialIcons name="notifications-off" size={40} color="#d63384" />
+          <Text style={styles.noNotificationsText}>No notifications yet</Text>
+          <Text style={styles.noNotificationsSubtext}>We'll notify you when something arrives</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.NotificationID.toString()}
+          renderItem={({ item }) => (
+            <View style={[
+              styles.notificationItem,
+              !item.isRead && styles.unreadNotification
+            ]}>
+              <View style={styles.notificationIcon}>
+                {item.type === 'alert' ? (
+                  <MaterialIcons name="warning" size={24} color="#FF5252" />
+                ) : item.type === 'Password Change' ? (
+                  <MaterialIcons name="security" size={24} color="#4CAF50" />
+                ) : (
+                  <MaterialIcons name="info" size={24} color="#2196F3" />
+                )}
+              </View>
+              <View style={styles.notificationContent}>
+                <Text style={styles.notificationMessage}>{item.message}</Text>
+                <View style={styles.notificationTimeContainer}>
+                  <MaterialIcons name="access-time" size={14} color="#888" />
+                  <Text style={styles.notificationTime}>
+                    {formatToPktTime(item.createdAt)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          contentContainerStyle={styles.notificationList}
+        />
+      )}
+    </View>
+  </View>
+</Modal>
 
         {/* Rating Modal */}
         <Modal transparent visible={showRating && !hasRated} animationType="fade">
@@ -448,6 +596,14 @@ const styles = StyleSheet.create({
     padding: 15,
     paddingTop: 10,
   },
+  headerIcons: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+notificationButton: {
+  marginRight: 20, // Space between notification and menu icons
+  position: 'relative',
+},
   backButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -457,6 +613,116 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginLeft: 10,
     fontWeight: 'bold',
+  },
+ 
+notificationBadge: {
+  position: 'absolute',
+  right: -5,
+  top: -5,
+  backgroundColor: 'red',
+  borderRadius: 10,
+  width: 20,
+  height: 20,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+notificationBadgeText: {
+  color: 'white',
+  fontSize: 10,
+  fontWeight: 'bold',
+},
+notificationOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.5)',
+  justifyContent: 'flex-end',
+},
+notificationContainer: {
+  backgroundColor: 'white',
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  padding: 20,
+  maxHeight: '80%',
+   shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+},
+notificationHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 15,
+  borderBottomWidth: 1,
+  borderBottomColor: '#f0f0f0',
+  paddingBottom: 15,
+},
+notificationTitle: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#d63384',
+},
+ closeButton: {
+    padding: 8,
+  },
+notificationList: {
+  paddingBottom: 20,
+},
+notificationItem: {
+  flexDirection: 'row',
+  paddingVertical: 15,
+      paddingHorizontal: 10,
+   borderRadius: 10,
+    marginVertical: 5,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+},
+unreadNotification: {
+backgroundColor: '#fff5f9',
+    borderLeftWidth: 3,
+    borderLeftColor: '#d63384',
+  },
+ notificationIcon: {
+    marginRight: 15,
+    marginTop: 3,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+notificationMessage: {
+  fontSize: 14,
+  color: '#333',
+  marginBottom: 5,
+   lineHeight: 20,
+},
+ notificationTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 5,
+  },
+noNotifications: {
+  padding: 30,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+ noNotificationsText: {
+    fontSize: 18,
+    color: '#555',
+    marginTop: 15,
+    fontWeight: '500',
+  },
+  noNotificationsSubtext: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 5,
   },
   sliderContainer: {
     height: 200,

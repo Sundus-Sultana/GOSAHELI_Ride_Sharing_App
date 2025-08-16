@@ -175,9 +175,11 @@ const handleAccept = async (requestId) => {
 
               // ✅ Only call once
               try {
-                await axios.post(`${API_URL}/api/notification/send-to-passenger`, {
+                console.log('Sending notification for request:', requestId); // Debug log
+                const notifRes = await axios.post(`${API_URL}/api/notification/send-to-passenger`, {
                   requestId
                 });
+                console.log('Notification response:', notifRes.data); // Debug log
               } catch (notifError) {
                 console.error('Notification failed (non-critical):', notifError);
               }

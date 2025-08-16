@@ -153,3 +153,46 @@ export const fetchFavourites = async (passengerId) => {
     };
   }
 };
+
+// Add to api.js
+// In api.js
+export const getNotifications = async (userId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/notifications?userId=${userId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.data || []; // Assuming your API returns { success: true, data: [...] }
+  } catch (err) {
+    console.error("Error fetching notifications:", err);
+    return []; // Return empty array on error
+  }
+};
+
+export const markNotificationsAsRead = async (userId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/notifications/mark-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (err) {
+    console.error("Error marking notifications as read:", err);
+    throw err;
+  }
+};

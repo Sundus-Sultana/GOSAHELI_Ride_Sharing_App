@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); 
+const client = require('../db');
 const axios = require('axios');
 
 // ✅ Save push token using userId (for Passenger or Driver)
@@ -13,7 +13,7 @@ router.post('/save-push-token', async (req, res) => {
 
   try {
     // Step 1: Try to find Passenger
-    const passengerRes = await db.query(
+    const passengerRes = await client.query(
       'SELECT "PassengerID" FROM "Passenger" WHERE "UserID" = $1',
       [userId]
     );
@@ -21,7 +21,7 @@ router.post('/save-push-token', async (req, res) => {
     if (passengerRes.rows.length > 0) {
       const passengerId = passengerRes.rows[0].PassengerID;
 
-      await db.query(
+      await client.query(
         'UPDATE "Passenger" SET push_token = $1 WHERE "PassengerID" = $2',
         [token, passengerId]
       );
@@ -30,7 +30,7 @@ router.post('/save-push-token', async (req, res) => {
     }
 
     // Step 2: Try to find Driver
-    const driverRes = await db.query(
+    const driverRes = await client.query(
       'SELECT "DriverID" FROM "Driver" WHERE "UserID" = $1',
       [userId]
     );
@@ -38,7 +38,7 @@ router.post('/save-push-token', async (req, res) => {
     if (driverRes.rows.length > 0) {
       const driverId = driverRes.rows[0].DriverID;
 
-      await db.query(
+      await client.query(
         'UPDATE "Driver" SET push_token = $1 WHERE "DriverID" = $2',
         [token, driverId]
       );
@@ -60,13 +60,16 @@ router.post('/save-push-token', async (req, res) => {
 // In your notification route
 router.post('/send-to-passenger', async (req, res) => {
   const { requestId } = req.body;
+    console.log('Received notification request for:', requestId); // Debug log
+
 
   try {
     // Get request details including passenger info
     const request = await client.query(
-      `SELECT cr.*, p.push_token 
+      `SELECT cr.*, p.push_token ,u.username
        FROM "Carpool_Request_Status" cr
        JOIN "Passenger" p ON cr."PassengerID" = p."PassengerID"
+              JOIN "User" u ON p."UserID" = u."UserID"
        WHERE cr."RequestID" = $1`,
       [requestId]
     );
@@ -75,11 +78,16 @@ router.post('/send-to-passenger', async (req, res) => {
       return res.status(404).json({ error: 'Request not found' });
     }
 
-    const { push_token } = request.rows[0];
-    
+    const { push_token,username } = request.rows[0];
+
     if (!push_token) {
-      return res.status(400).json({ error: 'No push token for passenger' });
-    }
+console.warn('No push token for passenger:', username);
+      return res.status(400).json({ 
+        error: 'No push token for passenger',
+        username  });
+          }
+              console.log('Sending notification to:', username, 'with token:', push_token); // Debug log
+
 
     // Send more detailed notification
     await axios.post('https://exp.host/--/api/v2/push/send', {
@@ -87,7 +95,7 @@ router.post('/send-to-passenger', async (req, res) => {
       sound: 'default',
       title: 'Request Accepted 🎉',
       body: 'Your carpool request has been accepted!',
-      data: { 
+      data: {
         requestId,
         type: 'request_accepted'
       }
