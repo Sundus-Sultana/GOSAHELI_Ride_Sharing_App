@@ -17,6 +17,7 @@ import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { uploadProfilePhoto, getUserPhoto, getVehicleByDriverId, API_URL, getDriverById } from '../../api';
+import { deleteCarpoolOffer } from '../utils/ApiCalls';
 const primaryColor = '#D64584';
 const darkGrey = '#333';
 
@@ -56,6 +57,45 @@ export default function OfferCarpool({ navigation, route }) {
       console.error('Error loading user photo:', error);
       setPhotoURL('');
     }
+  };
+
+  // Delete carpool offer function
+  const deleteCarpoolOfferHandler = async (offerId) => {
+    try {
+      const response = await deleteCarpoolOffer(offerId);
+
+      if (response.success) {
+        // Remove the deleted offer from the state
+        setDriverOffers(prevOffers =>
+          prevOffers.filter(offer => offer.CarpoolOfferID !== offerId)
+        );
+        Alert.alert('Success', 'Carpool offer deleted successfully');
+      } else {
+        throw new Error(response.message || 'Failed to delete carpool offer');
+      }
+    } catch (error) {
+      console.error('Error deleting carpool offer:', error);
+      Alert.alert('Error', 'Failed to delete carpool offer. Please try again.');
+    }
+  };
+
+  const confirmDelete = (offerId) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this carpool offer? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteCarpoolOfferHandler(offerId),
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   // Fetch user data immediately when component mounts
@@ -134,16 +174,16 @@ export default function OfferCarpool({ navigation, route }) {
       setLoadingOffers(true);
       const response = await fetch(`${API_URL}/api/driver/carpool/driver-offers/${driverId}`);
 
-     if (response.status === 404) {
-      // ✅ No offers found → not an error
-      console.warn("⚠️ No driver offers found.");
-      setDriverOffers([]);
-      return; // Stop execution here
-    }
+      if (response.status === 404) {
+        // ✅ No offers found → not an error
+        console.warn("⚠️ No driver offers found.");
+        setDriverOffers([]);
+        return; // Stop execution here
+      }
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
       // Check if data is an array or if it's nested in a property
@@ -443,9 +483,12 @@ export default function OfferCarpool({ navigation, route }) {
                     {/* Card Header */}
                     <View style={styles.cardHeader}>
                       <Text style={styles.cardDate}>DATE: {formattedDate}</Text>
-                      <View style={[styles.badge, { backgroundColor: '#da0202ff' }]}>
+                      <TouchableOpacity
+                        style={[styles.badge, { backgroundColor: '#da0202ff' }]}
+                        onPress={() => confirmDelete(offer.CarpoolOfferID)}                      >
                         <Text style={styles.badgeText}>DELETE</Text>
-                      </View>
+                      </TouchableOpacity>
+
                     </View>
 
                     {/* Route Information */}
@@ -503,10 +546,12 @@ export default function OfferCarpool({ navigation, route }) {
 
                       <TouchableOpacity
                         style={[styles.viewButton, { flex: 1, backgroundColor: '#17A2B8', marginLeft: 6 }]}
-                        onPress={() => navigation.navigate('EditCarpoolOfferScreen', {
+                        onPress={() => navigation.navigate('DriverCarpoolProfile', {
                           driverId,
                           userId,
-                          offerId: offer.OfferID // <-- pass unique ID of offer
+                          offer: offer,   // send full offer object
+                          offerId: offer.CarpoolOfferID,
+                          isEditing: true, // <-- pass unique ID of offer
                         })}
                       >
                         <Text style={styles.viewButtonText}>Edit</Text>
@@ -751,9 +796,9 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   buttonRowCard: {
-  flexDirection: 'row',
-  marginTop: 12,
-},
+    flexDirection: 'row',
+    marginTop: 12,
+  },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',

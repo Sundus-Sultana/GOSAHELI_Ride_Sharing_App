@@ -92,6 +92,7 @@ export const submitFeedback = async (feedbackData) => {
   });
   return res.json();
 };
+
 export const getFeedbackByRequestId = async (requestId) => {
   try {
     const res = await fetch(`${API_URL}/api/feedback/${requestId}`);
@@ -154,8 +155,7 @@ export const fetchFavourites = async (passengerId) => {
   }
 };
 
-// Add to api.js
-// In api.js
+
 export const getNotifications = async (userId) => {
   try {
     const response = await fetch(`${API_URL}/api/notifications?userId=${userId}`, {
@@ -194,5 +194,40 @@ export const markNotificationsAsRead = async (userId) => {
   } catch (err) {
     console.error("Error marking notifications as read:", err);
     throw err;
+  }
+};
+
+
+export const getDriverCarpoolProfile = async (offerId) => {
+  try {
+    const res = await axios.get(`${API_URL}/api/driver/carpool/offer/${offerId}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error fetching driver carpool profile:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateDriverCarpoolProfile = async (profileData) => {
+  try {
+    const res = await axios.put(
+      `${API_URL}/api/driver/carpool/offer/${profileData.OfferID}`,
+      profileData
+    );
+    return res.data;
+  } catch (error) {
+    console.error('Error updating driver carpool profile:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// ✅ NEW: Delete carpool offer function
+export const deleteCarpoolOffer = async (offerId) => {
+  try {
+    const res = await axios.delete(`${API_URL}/api/driver/carpool/delete-offer/${offerId}`);
+    return res.data;
+  } catch (error) {
+    console.error('Error deleting carpool offer:', error.response?.data || error.message);
+    throw error;
   }
 };

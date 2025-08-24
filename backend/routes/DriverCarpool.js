@@ -66,6 +66,79 @@ router.get('/driver-offers/:driverId', async (req, res) => {
   }
 });
 
+// ✅ NEW: Get a specific carpool offer by ID
+router.get('/offer/:offerId', async (req, res) => {
+  const { offerId } = req.params;
+
+  try {
+    const result = await client.query(
+      `SELECT * 
+       FROM "Driver_Carpool_Offers"
+       WHERE "CarpoolOfferID" = $1;`,
+      [offerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Offer not found' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching carpool offer:', err);
+    res.status(500).json({ error: 'Failed to fetch carpool offer' });
+  }
+});
+
+// ✅ NEW: Update an existing carpool offer
+router.put('/offer/:offerId', async (req, res) => {
+  const { offerId } = req.params;
+  const {
+    pickup_location,
+    dropoff_location,
+    seats,
+    date,
+    pickup_time,
+    dropoff_time,
+    recurring_days
+  } = req.body;
+
+  try {
+    const result = await client.query(
+      `UPDATE "Driver_Carpool_Offers"
+       SET 
+         pickup_location = $1,
+         dropoff_location = $2,
+         seats = $3,
+         date = $4,
+         pickup_time = $5,
+         dropoff_time = $6,
+         recurring_days = $7,
+         created_at = NOW()
+       WHERE "CarpoolOfferID" = $8
+       RETURNING *;`,
+      [
+        pickup_location,
+        dropoff_location,
+        seats,
+        date,
+        pickup_time,
+        dropoff_time,
+        recurring_days,
+        offerId
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Offer not found' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error updating carpool offer:', err);
+    res.status(500).json({ error: 'Failed to update carpool offer' });
+  }
+});
+
 // Get all matched requests for a driver
 router.get('/matched-requests-all/:driverId', async (req, res) => {
   const { driverId } = req.params;
@@ -113,6 +186,46 @@ router.get('/matched-requests-all/:driverId', async (req, res) => {
   } catch (err) {
     console.error('Matched-requests-all ERROR:', err);
     res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// Delete carpool offer by ID
+router.delete('/delete-offer/:offerId', async (req, res) => {
+  const { offerId } = req.params;
+  
+  try {
+    // First check if the offer exists
+    const checkQuery = 'SELECT * FROM "Driver_Carpool_Offers" WHERE "CarpoolOfferID" = $1';
+    const checkResult = await client.query(checkQuery, [offerId]);
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Carpool offer not found'
+      });
+    }
+    
+    // Delete the offer
+    const deleteQuery = 'DELETE FROM "Driver_Carpool_Offers" WHERE "CarpoolOfferID" = $1';
+    const result = await client.query(deleteQuery, [offerId]);
+    
+    if (result.rowCount > 0) {
+      res.json({
+        success: true,
+        message: 'Carpool offer deleted successfully'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete carpool offer'
+      });
+    }
+  } catch (error) {
+    console.error('Error deleting carpool offer:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 });
 
