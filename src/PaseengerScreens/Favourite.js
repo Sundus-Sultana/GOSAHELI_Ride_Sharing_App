@@ -207,6 +207,14 @@ export default function Favourite({ route, navigation }) {
           <Text style={styles.loadingText}>Loading your favourites...</Text>
         </View>
       ) : (
+        <View style={{ flex: 1 }}>
+          {/* 🔹 Swipe hint */}
+          {favourites.length > 0 && (
+            <View style={styles.hintContainer}>
+              <Ionicons name="swap-horizontal" size={16} color="#666" />
+              <Text style={styles.hintText}>Swipe left on a driver to remove</Text>
+            </View>
+          )}
         <Animated.FlatList
           data={favourites}
           keyExtractor={(item) => item.DriverID.toString()}
@@ -225,6 +233,7 @@ export default function Favourite({ route, navigation }) {
           onRefresh={handleRefresh}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
+         </View>
       )}
     </SafeAreaView>
   );
@@ -268,6 +277,17 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 36, // Balance the header layout
   },
+  hintContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 6,
+},
+hintText: {
+  fontSize: 14,
+  color: '#666',
+  marginLeft: 6,
+},
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -369,7 +389,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   removeButton: {
-    backgroundColor: '#ff4444',
+    backgroundColor: '#dd0202ff',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,

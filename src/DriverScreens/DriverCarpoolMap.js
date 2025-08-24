@@ -49,6 +49,22 @@ const cleanAddress = (placeName) => {
   const parts = placeName.split(',').map(p => p.trim());
   return parts.slice(0, 3).join(', ');
 };
+const IIUI_BOUNDS = {
+  minLat: 33.657,
+  maxLat: 33.661,
+  minLon: 73.023,
+  maxLon: 73.027,
+};
+
+const isInsideIIUI = (lat, lon) => {
+  return (
+    lat >= IIUI_BOUNDS.minLat &&
+    lat <= IIUI_BOUNDS.maxLat &&
+    lon >= IIUI_BOUNDS.minLon &&
+    lon <= IIUI_BOUNDS.maxLon
+  );
+};
+
 
 const debounce = (func, delay) => {
   let timeout;
@@ -119,27 +135,52 @@ const DriverCarpoolMap = ({ route }) => {
     }
   };
 
-  const startWatchingLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required.');
-        return;
-      }
-      const watcher = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 10 },
-        async (loc) => {
-          const { latitude, longitude } = loc.coords;
-          setPickup({ latitude, longitude });
+  const IIUI_CENTER = { lat: 33.6591, lon: 73.0254 };
+
+// Haversine formula to calculate distance between 2 GPS points
+const isNearIIUI = (lat, lon, radiusMeters = 300) => {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(lat - IIUI_CENTER.lat);
+  const dLon = toRad(lon - IIUI_CENTER.lon);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(IIUI_CENTER.lat)) *
+      Math.cos(toRad(lat)) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+  return distance <= radiusMeters;
+};
+
+const startWatchingLocation = async () => {
+  try {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Location permission is required.');
+      return;
+    }
+
+    const watcher = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 10 },
+      async (loc) => {
+        const { latitude, longitude } = loc.coords;
+        console.log("My GPS:", latitude, longitude);
+        setPickup({ latitude, longitude });
+
+        // ✅ Force pickup name if near IIUI
+        if (isNearIIUI(latitude, longitude)) {
+          setPickupText("International Islamic University Islamabad (IIUI)");
+          return; 
+        }
           const res = await axios.get(
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json`,
             { params: { access_token: MAPBOX_TOKEN, limit: 1, language: 'en' } }
           );
           if (res.data.features?.length > 0) {
-            const placeName = cleanAddress(res.data.features[0].place_name);
-            setPickupText(placeName);
-          }
-        }
+           const placeName = cleanAddress(res.data.features[0].place_name);
+          setPickupText(placeName);
+        }}
       );
       setLocationWatcher(watcher);
     } catch {

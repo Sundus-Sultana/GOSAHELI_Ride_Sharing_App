@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#d63384',
     marginBottom: 20,
+    marginTop:20,
     textAlign: 'center',
   },
   historyCard: {

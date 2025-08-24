@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from '@react-navigation/native';
 import { API_URL } from '../../api.js';
 import { Ionicons } from '@expo/vector-icons'; // or 'react-native-vector-icons/Ionicons' if using bare React Native
@@ -39,6 +40,7 @@ export default function ChatScreen({ route }) {
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   const senderPhotos = {
     [currentUserId]: currentUserPhoto,
@@ -179,8 +181,8 @@ export default function ChatScreen({ route }) {
       <StatusBar backgroundColor="#d63384" barStyle="light-content" />
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -221,8 +223,9 @@ export default function ChatScreen({ route }) {
             data={messages}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            contentContainerStyle={{ padding: 10, paddingBottom: 60 }}
+            contentContainerStyle={{ padding: 10, paddingBottom: (insets.bottom || 10) + 60 }}
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text>No messages yet. Start the conversation!</Text>
@@ -231,13 +234,14 @@ export default function ChatScreen({ route }) {
           />
         )}
 
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow]}>
           <TextInput
             placeholder="Type a message..."
             value={message}
             onChangeText={setMessage}
             style={styles.input}
             editable={!sending}
+            onSubmitEditing={sendMessage}
           />
           <TouchableOpacity
             style={[styles.sendButton, sending && { opacity: 0.6 }]}
@@ -277,15 +281,12 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   inputRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 8,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
     borderTopWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
+    alignItems: "center",
   },
   input: {
     flex: 1,
@@ -302,6 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 25,
     marginLeft: 8,
+    paddingVertical: 10
   },
   sendButtonText: {
     color: 'white',

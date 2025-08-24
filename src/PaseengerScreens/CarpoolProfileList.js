@@ -13,7 +13,7 @@ import axios from 'axios';
 const primaryColor = '#D64584';
 
 const CarpoolProfileList = ({ route, navigation }) => {
-  const { userId } = route.params || {};
+  const { userId,passengerId } = route.params || {};
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -231,7 +231,11 @@ const CarpoolProfileList = ({ route, navigation }) => {
               <TouchableOpacity
                 style={styles.useBtnFixed}
                 onPress={() => {
-                  navigation.navigate("CarpoolProfile", { profileId: selectedProfile.carpool_profile_id });
+                  navigation.navigate("CarpoolProfile", {
+                    userId,passengerId,
+                    profileId: selectedProfile.carpool_profile_id,
+                    distanceKm: selectedProfile.distance_km
+                  });
                   setSelectedProfile(null);
                 }}
               >
@@ -257,19 +261,19 @@ const CarpoolProfileList = ({ route, navigation }) => {
       <View style={styles.container}>
         {/* Heading */}
         <View style={styles.headingcontainer}>
-      <Text style={styles.heading}>My Carpool Profiles</Text>
-      </View>
+          <Text style={styles.heading}>My Carpool Profiles</Text>
+        </View>
         <FlatList
           data={profiles}
           keyExtractor={(item) => item.carpool_profile_id.toString()}
           renderItem={renderCard}
-          contentContainerStyle={{ padding: 20 , flexGrow: 1}}
-           ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="car-outline" size={48} color="#D64584" />
-            <Text style={styles.emptyText}>You have not created any carpool profiles yet.</Text>
-          </View>
-        )}
+          contentContainerStyle={{ padding: 20, flexGrow: 1 }}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="car-outline" size={48} color="#D64584" />
+              <Text style={styles.emptyText}>You have not created any carpool profiles yet.</Text>
+            </View>
+          )}
           onRefresh={() => {
             setRefreshing(true);
             fetchProfiles();
@@ -285,31 +289,31 @@ const CarpoolProfileList = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
   container: { flex: 1, backgroundColor: '#f5f5f5' },
-  headingcontainer:{
-    borderColor:'#000000ff',
-    borderWidth:0.2,
-    padding:8
+  headingcontainer: {
+    borderColor: '#000000ff',
+    borderWidth: 0.2,
+    padding: 8
   },
-  heading: { 
-  fontSize: 20, 
-  fontWeight: '600', 
-  color: '#000000ff', 
-  paddingHorizontal: 20, 
-  paddingTop: 15 
-},
-emptyContainer: { 
-  flex: 1, 
-  justifyContent: 'center', 
-  alignItems: 'center', 
-  paddingTop: 50 
-},
-emptyText: { 
-  fontSize: 16, 
-  color: '#777', 
-  textAlign: 'center', 
-  marginTop: 10, 
-  paddingHorizontal: 20 
-},
+  heading: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000000ff',
+    paddingHorizontal: 20,
+    paddingTop: 15
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#777',
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 20
+  },
   card: { backgroundColor: '#fff', borderRadius: 10, padding: 16, marginBottom: 16, elevation: 2 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   arrowRow: { alignItems: 'left', marginVertical: 4, marginLeft: 24 },

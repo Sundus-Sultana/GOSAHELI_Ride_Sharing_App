@@ -42,6 +42,30 @@ router.post('/offer', async (req, res) => {
   }
 });
 
+// 📌 GET: Fetch all carpool offers by a driver
+router.get('/driver-offers/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+
+  try {
+    const result = await client.query(
+      `SELECT * 
+       FROM "Driver_Carpool_Offers"
+       WHERE "DriverID" = $1
+       ORDER BY date DESC, pickup_time ASC;`,
+      [driverId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'No offers found for this driver' });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Error fetching driver offers:', err);
+    res.status(500).json({ error: 'Failed to fetch driver offers' });
+  }
+});
+
 // Get all matched requests for a driver
 router.get('/matched-requests-all/:driverId', async (req, res) => {
   const { driverId } = req.params;

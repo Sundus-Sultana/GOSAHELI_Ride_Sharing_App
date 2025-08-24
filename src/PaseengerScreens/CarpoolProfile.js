@@ -69,6 +69,7 @@ const CarpoolProfile = () => {
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  //initialize with saved profile
   useEffect(() => {
     const initializeForm = async () => {
       if (profileId) {
@@ -89,7 +90,9 @@ const CarpoolProfile = () => {
             recurring: profile.is_recurring,
             daysOfWeek: profile.recurring_days?.split(',') || [],
             specialRequests: profile.special_requests || '',
-            fare: profile.fare|| ''
+            fare: profile.fare|| '',
+              distance_km: distanceKm  // Add distance
+
           }));
 
           setRouteType(profile.route_type || 'One Way');
@@ -335,12 +338,18 @@ const CarpoolProfile = () => {
       Alert.alert('Error', 'Fare calculation in progress');
       return;
     }
-    const { pickup, dropoff, seatsNeeded, date } = request;
+    const { pickup, dropoff, seatsNeeded, date, recurring, daysOfWeek  } = request;
     if (!pickup || !dropoff || !seatsNeeded || !date) {
       Alert.alert("Error", "Please complete all required fields.");
       return;
     }
 
+// ✅ New validation: If recurring ride but no day selected
+console.log("Recurring:", request.recurring, "Days selected:", request.daysOfWeek);
+  if (!recurring || (!daysOfWeek || daysOfWeek.length === 0)) {
+    Alert.alert("Error", "Please select at least one day for a recurring ride.");
+    return;
+  }
     setIsSubmitting(true);
 
     try {
@@ -360,7 +369,9 @@ const CarpoolProfile = () => {
         recurring_days: request.recurring ? request.daysOfWeek.join(',') : null,
         special_requests: request.specialRequests || null,
         route_type: routeType,
-        fare: fareDetails.totalFare
+        fare: fareDetails.totalFare,
+          distance_km: distanceKm  // Add distance
+
       };
 
       let carpool_profile_id = null;
@@ -369,6 +380,8 @@ const CarpoolProfile = () => {
         const profilePayload = {
           UserID: userId,
           ...ridePayload,
+            distance_km: distanceKm  // Add distance
+
         };
 
         const response = await saveCarpoolProfile(profilePayload);

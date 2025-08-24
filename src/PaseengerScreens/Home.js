@@ -24,6 +24,7 @@ import { auth } from '../firebase/setup';
 import { getRideHistory } from '../../api.js';
 import SaheliLogo from '../../assets/IconWomen2.png';
 import { getUserById ,getDriverById} from '../../api';
+import * as Notifications from 'expo-notifications';
 import { getNotifications, markNotificationsAsRead } from "../utils/ApiCalls.js";
 import { ScrollView } from "react-native-gesture-handler";
 import axios from 'axios'; // ✅ Make sure this is at the top
@@ -48,7 +49,7 @@ const Home = ({ route }) => {
   console.log('name IN Home SCREEN', userName);
 
 
-    // Add this helper function to format time to PKT
+    //  format time to PKT
   const formatToPktTime  = (timestamp) => {
   if (!timestamp) return 'Just now';
   
@@ -90,6 +91,52 @@ const Home = ({ route }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+useEffect(() => {
+  let intervalId;
+  let lastUnreadCount = 0; // keep track of previous unread count
+
+  const fetchNotifications = async () => {
+    if (!userId) return;
+    try {
+      const notifs = await getNotifications(userId);
+      setNotifications(notifs);
+
+      const unread = notifs.filter(n => !n.isRead).length;
+      setUnreadCount(unread);
+
+      // 🔔 If unread count increased, trigger local notification
+      if (unread > lastUnreadCount) {
+        const latestNotif = notifs.find(n => !n.isRead); // get one unread notif
+        if (latestNotif) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "New Notification 📢",
+              body: latestNotif.message || "You have a new notification",
+              sound: true,
+            },
+            trigger: null, // show immediately
+          });
+        }
+      }
+
+      lastUnreadCount = unread; // update count
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
+  if (notificationVisible) {
+    fetchNotifications();
+    intervalId = setInterval(fetchNotifications, 1500);
+  }
+
+  return () => {
+    if (intervalId) clearInterval(intervalId);
+  };
+}, [notificationVisible, userId]);
+
+
   
   // Add this useEffect to fetch notifications
   useEffect(() => {
@@ -207,6 +254,26 @@ const Home = ({ route }) => {
     }
   }
 };
+const goToFavourite = async () => {
+  if (!passengerId) {
+    try {
+      const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+      if (response.data.passenger?.PassengerID) {
+        const id = response.data.passenger.PassengerID;
+        setPassengerId(id);
+        navigation.navigate('Favourite', { passengerId: id, userId, userName });
+      } else {
+        Alert.alert("Error", "Passenger record not found.");
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Unable to fetch passenger info.");
+    }
+  } else {
+    navigation.navigate('Favourite', { passengerId, userId, userName });
+  }
+};
+
 
 const fetchPassengerIdAndNavigate = async () => {
   try {
@@ -259,6 +326,28 @@ useEffect(() => {
   fetchUserData();
 }, []);
 
+useEffect(() => {
+  if (!userId) return;
+
+  const intervalId = setInterval(async () => {
+    try {
+      // Fetch notifications
+      const notifs = await getNotifications(userId);
+
+      // Update state instantly
+      setNotifications(notifs);
+
+      // Calculate unread count
+      const unread = notifs.filter(n => !n.isRead).length;
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  }, 1500); // every 1.5 seconds
+
+  // Cleanup interval when component unmounts
+  return () => clearInterval(intervalId);
+}, [userId]);
 
 
   // Fetch ride history
@@ -325,12 +414,13 @@ const fetchPassengerIdAndNavigateToSupport = async () => {
 
   // 🔄 Send only RateValue and UserID
   try {
-    const response = await axios.post(`${API_URL}/api/feedback`, {
-      RateValue: rating,
-      UserID: userId, // Firebase UID
-    });
+    const response = await axios.post(`${API_URL}/api/saheli-feedback`, {
+  UserID: userId,
+  RateValue: rating,
+});
 
-    console.log('✅ Feedback submitted:', response.data);
+      Alert.alert('Success', 'Feedback submitted successfully');
+      console.log('✅ Feedback saved:', response.data);
   } catch (error) {
     console.error('❌ Failed to submit feedback:', error.response?.data || error.message);
   }
@@ -399,7 +489,7 @@ const fetchPassengerIdAndNavigateToSupport = async () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <FontAwesome5 name="arrow-left" size={24} color="white" />
+           {/* back <FontAwesome5 name="arrow-left" size={24} color="white" />*/}
           <Text style={styles.backText}>Saheli</Text>
         </TouchableOpacity>
  <View style={styles.headerIcons}>
@@ -641,17 +731,8 @@ const fetchPassengerIdAndNavigateToSupport = async () => {
           <MaterialIcons name="home" size={25} color="#d63384" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => {
-    if (passengerId) {
-      navigation.navigate('Favourite', { 
-        passengerId: passengerId,
-        userId: userId,
-        userName: userName 
-      });
-    } else {
-      Alert.alert("Info", "Please wait while we load your passenger information");
-    }
-  }}>
+        <TouchableOpacity style={styles.navItem} onPress={goToFavourite}>
+
           <MaterialIcons name="favorite-border" size={25} color="#888" />
           <Text style={styles.navText}>Favorites</Text>
         </TouchableOpacity>

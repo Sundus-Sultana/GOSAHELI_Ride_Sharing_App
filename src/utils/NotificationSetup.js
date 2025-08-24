@@ -28,7 +28,7 @@ export const registerForPushNotificationsAsync = async (userId) => {
     }
 
     if (finalStatus !== 'granted') {
-      Alert.alert('Permission Denied', 'Failed to get push token for notifications!');
+   {/*   Alert.alert('Permission Denied', 'Failed to get push token for notifications!');*/}
       return null;
     }
 

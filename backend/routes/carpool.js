@@ -7,7 +7,7 @@ const client = require('../db');
 
 // Get a specific carpool profile by ID to use that profile
 router.get('/get-carpool-profile/:profileId', async (req, res) => {
-   const { profileId } = req.params;
+  const { profileId } = req.params;
   console.log("Fetching profile for ID:", profileId);
 
   try {
@@ -48,7 +48,7 @@ router.get('/get-user-carpool-profiles/:userId', async (req, res) => {
 
 // Save carpool profile
 router.post('/save-profile', async (req, res) => {
-  console.log('Received request with body:', req.body); 
+  console.log('Received request with body:', req.body);
   try {
     const {
       UserID,
@@ -69,7 +69,7 @@ router.post('/save-profile', async (req, res) => {
       fare
     } = req.body;
 
-console.log("Final route_type going to DB:", route_type);
+    console.log("Final route_type going to DB:", route_type);
 
     const query = `
   INSERT INTO carpool_profile (
@@ -88,8 +88,9 @@ console.log("Final route_type going to DB:", route_type);
     recurring_days,
     special_requests,
     route_type,
-    fare
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16)
+    fare,
+    distance_km
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16,$17)
   RETURNING carpool_profile_id;
 `;
 
@@ -109,7 +110,9 @@ console.log("Final route_type going to DB:", route_type);
       recurring_days,
       special_requests || null,
       route_type,
-      req.body.fare || null 
+      req.body.fare || null,
+      req.body.distance_km || null  // Add distance
+
     ];
 
     const result = await client.query(query, values);
@@ -205,12 +208,13 @@ router.post('/create-status-request', async (req, res) => {
         recurring_days,
         special_requests,
         route_type,
-        fare
+        fare,
+        distance_km
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19,$20
+        $16, $17, $18, $19,$20,$21
       )
       RETURNING *;
       `,
@@ -234,7 +238,9 @@ router.post('/create-status-request', async (req, res) => {
         recurring_days,
         special_requests,
         route_type,
-         req.body.fare || null 
+        req.body.fare || null,
+        req.body.distance_km || null  // Add distance
+
       ]
     );
 
@@ -265,9 +271,9 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
     );
 
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Ride request not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Ride request not found'
       });
     }
 
@@ -277,10 +283,10 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
       [requestId]
     );
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: 'Ride request deleted successfully',
-      data: deleteResult.rows[0] 
+      data: deleteResult.rows[0]
     });
   } catch (error) {
     console.error('Error deleting ride request:', error);
@@ -345,6 +351,7 @@ rating_summary AS (
         crs.music_preference,
         crs.conversation_preference,
         crs.allows_luggage,
+        crs.distance_km,
         d."DriverID",
         d."UserID" AS driver_user_id,
         u.username AS driver_name,

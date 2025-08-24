@@ -61,7 +61,7 @@ useFocusEffect(
     setRememberMe(false);
   };
 
-  const validateAndLogin = async () => {
+const validateAndLogin = async () => {
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
   if (!email || !emailRegex.test(email)) {
@@ -75,76 +75,108 @@ useFocusEffect(
   }
 
   setIsLoading(true);
+  let loginErrorMessage = '';
 
-   try {
-      // Step 1: Authenticate
-       const loginResponse = await axios.post(`${API_URL}/login`, { email, password });
+  try {
+    let userId, dbUsername, dbEmail;
+    let authSource = '';
 
-  if (!loginResponse.data.success || !loginResponse.data.user?.UserID) {
-    throw new Error('Login failed or missing UserID');
-  }
-
-  const userId = loginResponse.data.user.UserID;
- const dbUsername = loginResponse.data.user.username;
-const dbEmail = loginResponse.data.user.email;
-
-console.log('✅ UserID from login:', userId);
-console.log(`✅ Logged-in successful. UserID: ${userId}, Name: ${dbUsername}, Email: ${dbEmail}`)
-
-
-
-  const userData = await getUserById(userId);
-  if (!userData) throw new Error('User record not found');
-      // Step 3: Remember Me logic
-      if (rememberMe) {
-        await AsyncStorage.setItem('userCredentials', JSON.stringify({ email, password, rememberMe: true }));
+    // --- Try PostgreSQL authentication ---
+    try {
+      const loginResponse = await axios.post(`${API_URL}/login`, { email, password });
+      if (loginResponse.data.success && loginResponse.data.user?.UserID) {
+        authSource = 'postgres';
+        userId = loginResponse.data.user.UserID;
+        dbUsername = loginResponse.data.user.username;
+        dbEmail = loginResponse.data.user.email;
+        console.log('✅ PostgreSQL auth success');
       } else {
-        await AsyncStorage.removeItem('userCredentials');
+        throw new Error('PostgreSQL auth failed');
       }
+    } catch (postgresError) {
+      console.log('PostgreSQL auth failed, trying Firebase...');
 
-      // Step 4: Save userId
-      await AsyncStorage.setItem('UserID', String(userData.UserID));
+      // --- Try Firebase authentication ---
+      try {
+        const firebaseUser = await signInWithEmailAndPassword(auth, email, password);
+        console.log('✅ Firebase auth success');
 
-      // Step 5: Navigate based on role
-      clearLoginForm();
+        // Fetch user from PostgreSQL by email
+        const userResponse = await axios.get(`${API_URL}/user-by-email`, { params: { email } });
+        if (userResponse.data?.UserID) {
+          userId = userResponse.data.UserID;
+          dbUsername = userResponse.data.username;
+          dbEmail = userResponse.data.email;
+        } else {
+          // User exists in Firebase but not PostgreSQL
+          userId = firebaseUser.user.uid;
+          console.warn('User exists in Firebase but not PostgreSQL');
+        }
+      } catch (firebaseError) {
+        // --- Determine if email exists in either system ---
+        let postgresExists = false;
+        let firebaseExists = false;
 
-      if (userData.last_role === 'driver') {
-        navigation.navigate('DriverHome', {
-          userName: userData.username || 'User',
-          userId: userData.UserID,
-        });
-      } else if (userData.last_role === 'passenger') {
-        navigation.navigate('Home', {
-          userName: userData.username || 'User',
-          userId: userData.UserID,
-        });
-      } else {
-        Alert.alert('Error', 'User role not set properly. Please contact support.');
+        try {
+          const checkResponse = await axios.get(`${API_URL}/check-email`, { params: { email } });
+          postgresExists = checkResponse.data.exists;
+        } catch (checkError) {
+          console.log('Email check error:', checkError);
+        }
+
+        try {
+          await signInWithEmailAndPassword(auth, email, 'dummy_password');
+        } catch (error) {
+          if (error.code === 'auth/user-not-found') {
+            firebaseExists = false;
+          } else if (error.code === 'auth/wrong-password') {
+            firebaseExists = true;
+          }
+        }
+
+        // Set proper login error message
+        loginErrorMessage = (postgresExists || firebaseExists)
+          ? 'The password you entered is incorrect'
+          : 'Incorrect email.';
+
+        Alert.alert('Login Failed', loginErrorMessage);
+        setIsLoading(false);
+        return; // Stop execution here
       }
-    } catch (error) {
-  if (error.response) {
-    console.warn('Login failed:', error.response.status, error.response.data?.message);
-  } else if (error.request) {
-    console.warn('No response received:', error.request);
-  } else {
-    console.warn('Unexpected error:', error.message);
-  }
-
-  if (error.response) {
-    if (error.response.status === 401) {
-      Alert.alert('Invalid Login', 'Invalid email or password.');
-    } else {
-      Alert.alert('Error', error.response.data?.message || 'Something went wrong. Please try again later.');
     }
-  } else if (error.request) {
-    Alert.alert('Network Error', 'Cannot connect to the server. Please check your internet connection.');
-  } else {
-    Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+
+    // --- Successful authentication ---
+    console.log(`✅ Auth succeeded via ${authSource}`);
+
+    const userData = (await getUserById(userId)) || {};
+
+    if (rememberMe) {
+      await AsyncStorage.setItem('userCredentials', JSON.stringify({
+        email,
+        password,
+        rememberMe: true
+      }));
+    }
+
+    await AsyncStorage.setItem('UserID', String(userId));
+
+    navigation.navigate(
+      userData.last_role === 'driver' ? 'DriverHome' : 'Home',
+      {
+        userName: dbUsername || userData.username || 'User',
+        userId
+      }
+    );
+
+  } catch (error) {
+    console.error('Login error:', error);
+    Alert.alert('Login Failed', 'Could not log in. Please try again.');
+  } finally {
+    setIsLoading(false);
   }
-} finally {
-  setIsLoading(false); // ✅ Only in frontend
-}
-  };
+};
+
+
 
 
   return (

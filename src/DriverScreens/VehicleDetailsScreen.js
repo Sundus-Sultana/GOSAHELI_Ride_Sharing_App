@@ -17,8 +17,8 @@ const carModels = [
   'CX-5', 'CX-3', 'RAV4', 'Jimny', 'Vitara', 'Cultus', 'i10', 'Model S', 'Model X', 'Model 3'
 ];
 
-const vehicleTypes = ['Car', 'Van'];
-const capacities = ['1', '2', '3', '4', '5', '6', '7'];
+const vehicleTypes = ['Car'];
+const capacities = ['1', '2', '3', '4'];
 
 const VehicleDetailsScreen = ({ route }) => {
   const navigation = useNavigation();
