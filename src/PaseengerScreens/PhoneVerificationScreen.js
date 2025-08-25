@@ -53,6 +53,7 @@ export default function PhoneVerificationScreen({ route, navigation }) {
   password,
   phoneNo,
 });
+console.log('Backend response:', response.data);
 // Now fetch the user from PostgreSQL by email to get UserID
     const getUserResponse = await axios.get(`${USER_ENDPOINT}`, {
       params: { email: email }
@@ -67,8 +68,6 @@ export default function PhoneVerificationScreen({ route, navigation }) {
 
       console.log('USERID :', dbUserId);
 
-
-    
 
     Alert.alert('Success', 'Phone verified and account created!', [
   {

@@ -9,6 +9,13 @@ import { registerForPushNotificationsAsync } from './src//utils/NotificationSetu
 /* Components */
 import CustomBackButton from './src/components/CustomBackButton';
 
+
+/* Sundus Passenger Screens */
+import RideBooking from './src/PaseengerScreens/Sundus/RideBooking';
+
+/* Sundus Passenger Screens */
+import DriverRideBooking from './src/DriverScreens/sundus/DriverRideBooking'
+
 /* Passenger Screens */
 import LandingActivity from './src/PaseengerScreens/LandingActivity';
 import Signup from './src/PaseengerScreens/Signup';
@@ -67,6 +74,11 @@ useEffect(() => {
     <>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="LandingActivity">
+          {/* Sundus Passenger Screens */}
+<Stack.Screen name="RideBooking" component={RideBooking} options={{ headerShown: false }} />
+
+{/* Sundus Driver Screens */}
+<Stack.Screen name="DriverRideBooking" component={DriverRideBooking} options={{ headerShown: false }} />
           {/* Passenger Screens */}
           <Stack.Screen name="LandingActivity" component={LandingActivity} options={{ headerShown: false }} />
           <Stack.Screen name="Signup" component={Signup} options={{ headerShown: false }} />

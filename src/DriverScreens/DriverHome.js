@@ -243,9 +243,15 @@ useEffect(() => {
 
         {/* Toggle Buttons */}
         <View style={styles.toggleContainer}>
-          <TouchableOpacity
+         <TouchableOpacity
             style={[styles.toggleButton, activeTab === "OfferRide" && styles.activeToggle]}
-            onPress={() => setActiveTab("OfferRide")}
+            onPress={() => {
+              setActiveTab("OfferRide");
+              navigation.navigate("DriverRideBooking", {
+                userId: userId,
+                driverId: driver?.DriverID,  // Pass driverId
+              });
+            }}
           >
             <Text
               style={[

@@ -109,6 +109,8 @@ const Home = ({ route }) => {
 
 
 
+
+
  const insertPassenger = async (id) => {
   console.log('🛫 insertPassenger() called with:', id); // <--- Add this
   try {
@@ -135,6 +137,34 @@ const fetchPassengerIdAndNavigate = async () => {
 
       // Navigate after getting PassengerID
       navigation.navigate('Carpool', {
+        userName: userName || auth.currentUser?.displayName || 'User',
+        userEmail: auth.currentUser?.email,
+        userId: userId,
+        passengerId: passengerId,
+        riderId: route.params?.userId
+      });
+    } else {
+      Alert.alert("Error", "Passenger record not found.");
+    }
+  } catch (error) {
+    console.error("Error fetching PassengerID:", error.response?.data || error.message);
+    Alert.alert("Error", "Unable to fetch PassengerID. Please try again.");
+  }
+};
+
+
+const fetchPassengerIdAndNavigateToRide = async () => {
+  try {
+    console.log("Calling:", `${API_URL}/api/get-passenger/${userId}`);
+    const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+    if (response.data.passenger?.PassengerID) {
+      const passengerId = response.data.passenger.PassengerID;
+      console.log("Fetched PassengerID:", passengerId);
+       setPassengerId(passengerId); 
+        console.log("set passenger ID:", passengerId);
+
+      // Navigate after getting PassengerID
+      navigation.navigate('RideBooking', {
         userName: userName || auth.currentUser?.displayName || 'User',
         userEmail: auth.currentUser?.email,
         userId: userId,
@@ -343,7 +373,10 @@ useEffect(() => {
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleButton, activeTab === 'BookRide' && styles.activeToggle]}
-          onPress={() => setActiveTab('BookRide')}
+          onPress={() => {setActiveTab('RideBooking');
+                fetchPassengerIdAndNavigateToRide(); // 👈 Fetch PassengerID first
+          }
+          }
         >
           <Text style={[styles.toggleText, activeTab === 'BookRide' ? styles.activeToggleText : styles.inactiveToggleText]}>
             Book Ride
