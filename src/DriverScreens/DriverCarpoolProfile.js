@@ -14,16 +14,27 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
-import { saveCarpoolProfile ,saveDriverCarpoolProfile} from '../../api';
+import { saveCarpoolProfile, saveDriverCarpoolProfile } from '../../api';
+import { getDriverCarpoolProfile, updateDriverCarpoolProfile } from '../utils/ApiCalls';
+
 
 const primaryColor = '#D64584';
 const lightGrey = '#E0E0E0';
 
 const DriverCarpoolProfile = ({ route }) => {
-  const { userId,driverId ,pickupLocation, dropoffLocation } = route.params || {};
-  console.log(" UserID AND DriverID",userId,driverId)
- const navigation = useNavigation();
+  const params = route.params || {};
+  const userId = params.userId || '';
+  const driverId = params.driverId || '';
+  const pickupLocation = params.pickupLocation || '';
+  const dropoffLocation = params.dropoffLocation || '';
+  const isEditing = params.isEditing || false;
+  const offerId = params.offerId || null;
+  console.log("DriverCarpoolProfile params:", userId, driverId, isEditing, offerId);
+
+  console.log(" UserID AND DriverID", userId, driverId)
+  const navigation = useNavigation();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [pickupTime, setPickupTime] = useState(new Date());
   const [dropOffTime, setDropOffTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -33,23 +44,23 @@ const DriverCarpoolProfile = ({ route }) => {
   const [request, setRequest] = useState({
     pickup: '',
     dropoff: '',
-    seatsAvailable: '3',
+    seatsAvailable: '1',
     date: new Date(),
     daysOfWeek: [],
   });
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-   useFocusEffect(
-          React.useCallback(() => {
-            const onBackPress = () => {
-              navigation.navigate('DriverCarpoolMap', { userId, driverId });
-              return true;
-            };
-            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-            return () => subscription.remove();
-          }, [])
-        );
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        navigation.navigate('DriverCarpoolMap', { userId, driverId });
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
 
   useEffect(() => {
     if (route.params) {
@@ -60,7 +71,56 @@ const DriverCarpoolProfile = ({ route }) => {
       }));
     }
   }, [route.params]);
-  
+
+  // Load existing offer data if in edit mode
+  useEffect(() => {
+    if (isEditing && offerId) {
+      loadOfferData();
+    }
+  }, [isEditing, offerId]);
+
+  const loadOfferData = async () => {
+    setIsLoading(true);
+    try {
+      const offerData = await getDriverCarpoolProfile(offerId);
+      console.log("Loaded offer data:", offerData);
+
+      if (offerData) {
+        // Parse the offer data and set the state accordingly
+        setRequest({
+          pickup: offerData.pickup_location,
+          dropoff: offerData.dropoff_location,
+          seatsAvailable: offerData.seats.toString(),
+          date: new Date(offerData.date),
+          daysOfWeek: offerData.recurring_days ? offerData.recurring_days.split(',') : [],
+        });
+
+        // Set pickup time
+        if (offerData.pickup_time) {
+          const [hours, minutes] = offerData.pickup_time.split(':');
+          const pickupDate = new Date();
+          pickupDate.setHours(parseInt(hours), parseInt(minutes));
+          setPickupTime(pickupDate);
+        }
+
+        // Set dropoff time and route type
+        if (offerData.dropoff_time) {
+          const [hours, minutes] = offerData.dropoff_time.split(':');
+          const dropoffDate = new Date();
+          dropoffDate.setHours(parseInt(hours), parseInt(minutes));
+          setDropOffTime(dropoffDate);
+          setRouteType('Two Way');
+        } else {
+          setRouteType('One Way');
+        }
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to load offer data");
+      console.error("Error loading offer:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const formatTime = (date) => {
     let hours = date.getHours();
@@ -71,7 +131,8 @@ const DriverCarpoolProfile = ({ route }) => {
     return `${hours}:${formattedMinutes} ${ampm}`;
   };
 
-  const handleTimeChange = (event, selectedDate) => {
+  // ✅ Fix: remove "event"
+  const handleTimeChange = (selectedDate) => {
     setShowTimePicker(false);
     if (selectedDate) {
       if (activeTimePickerFor === 'pickup') {
@@ -103,6 +164,7 @@ const DriverCarpoolProfile = ({ route }) => {
     return `${hours}:${minutes}:00`;
   };
 
+
   const submitRequest = async () => {
     const { pickup, dropoff, seatsAvailable, date, daysOfWeek } = request;
     if (!pickup || !dropoff || !seatsAvailable || !date) {
@@ -113,31 +175,46 @@ const DriverCarpoolProfile = ({ route }) => {
     setIsSubmitting(true);
 
     try {
-       const profilePayload = {
-    UserID: userId, // from AsyncStorage or context
-    DriverID: driverId, // from login or stored data
-    pickup_location: pickup,
-    dropoff_location: dropoff,
-    seats: parseInt(seatsAvailable),
-    date: date.toISOString().split('T')[0], // format date
-    pickup_time: formatTimeForDB(pickupTime), // HH:MM format
-    dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
-    recurring_days: daysOfWeek.join(','),
-  };
-
-      await saveDriverCarpoolProfile(profilePayload);
-      Alert.alert("Success", "Carpool Offered Successfully!", [
-  {
-    text: "OK",
-    onPress: () => {
-      navigation.navigate("DriverCarpoolStatusScreen", {
-        driverId: driverId,
-        userId: userId,
-      });
-    },
-  },
-]);
-
+      const profilePayload = {
+        UserID: userId, // from AsyncStorage or context
+        DriverID: driverId, // from login or stored data
+        pickup_location: pickup,
+        dropoff_location: dropoff,
+        seats: parseInt(seatsAvailable),
+        date: date.toISOString().split('T')[0], // format date
+        pickup_time: formatTimeForDB(pickupTime), // HH:MM format
+        dropoff_time: routeType === 'Two Way' ? formatTimeForDB(dropOffTime) : null,
+        recurring_days: daysOfWeek.join(','),
+      };
+      if (isEditing && offerId) {
+        // Update existing offer
+        profilePayload.OfferID = offerId;
+        await updateDriverCarpoolProfile(profilePayload);
+        Alert.alert("Success", "Carpool Offer Updated Successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              navigation.navigate("DriverCarpoolStatusScreen", {
+                driverId: driverId,
+                userId: userId,
+              });
+            },
+          },
+        ]);
+      } else {
+        await saveDriverCarpoolProfile(profilePayload);
+        Alert.alert("Success", "Carpool Offered Successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              navigation.navigate("DriverCarpoolStatusScreen", {
+                driverId: driverId,
+                userId: userId,
+              });
+            },
+          },
+        ]);
+      }
     } catch (error) {
       Alert.alert("Error", "Failed to save Offered profile");
     } finally {
@@ -179,25 +256,25 @@ const DriverCarpoolProfile = ({ route }) => {
               style={styles.locationInput}
               value={request.pickup}
               placeholder="Pickup location"
-               editable={false}
-                selectTextOnFocus={false}
-                multiline={true}
-                numberOfLines={2}
-                textAlignVertical="top"
+              editable={false}
+              selectTextOnFocus={false}
+              multiline={true}
+              numberOfLines={2}
+              textAlignVertical="top"
             />
             <TouchableOpacity onPress={() => showPicker('pickup')}>
               <Text style={styles.timeText}>{formatTime(pickupTime)}</Text>
             </TouchableOpacity>
           </View>
 
-         <View style={styles.directionArrowContainer}>
-                     {routeType === 'Two Way' ? (
-                       <Ionicons name="swap-vertical" size={20} color={"#000000"} style={{ marginRight: 300 }} />
-                     ) : (
-                       <Ionicons name="arrow-down" size={20} color={"#000000"} style={{ marginRight: 300 }} />
-                     )}
-                   </View>
-         
+          <View style={styles.directionArrowContainer}>
+            {routeType === 'Two Way' ? (
+              <Ionicons name="swap-vertical" size={20} color={"#000000"} style={{ marginRight: 300 }} />
+            ) : (
+              <Ionicons name="arrow-down" size={20} color={"#000000"} style={{ marginRight: 300 }} />
+            )}
+          </View>
+
 
           <View style={styles.locationRow}>
             <FontAwesome5 name="map-marker-alt" size={20} color={primaryColor} />
@@ -205,11 +282,11 @@ const DriverCarpoolProfile = ({ route }) => {
               style={styles.locationInput}
               value={request.dropoff}
               placeholder="Dropoff location"
-               editable={false}
-                selectTextOnFocus={false}
-                multiline={true}
-                numberOfLines={2}
-                textAlignVertical="top"
+              editable={false}
+              selectTextOnFocus={false}
+              multiline={true}
+              numberOfLines={2}
+              textAlignVertical="top"
             />
             {routeType === 'Two Way' && (
               <TouchableOpacity onPress={() => showPicker('dropoff')}>

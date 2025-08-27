@@ -41,6 +41,10 @@ const upload = multer({ storage });
 const notificationPassengerRoutes = require('./routes/NotificationPassenger');
 app.use('/api/notification', notificationPassengerRoutes);
 
+//  saheli Feedback
+const saheliFeedbackRoutes = require('./routes/saheliFeedback');
+app.use('/api', saheliFeedbackRoutes);
+
 
 //  ProfileUpdation
 const profileUpdationRoutes = require('./routes/ProfileUpdation');
@@ -57,12 +61,28 @@ app.use('/api/feedback', feedbackRoute);
 //  notification
 const notificationRoutes = require('./routes/notifications'); // adjust path if needed
 app.use('/api', notificationRoutes);
+const notificationsRouter = require('./routes/notifications');
+app.use('/api/notifications', notificationsRouter);
+
+//  complaints
+app.use('/api/complaints', require('./routes/complaints'));
+
+//  Favourites
+app.use("/api/favourites", require("./routes/favourites"));
+const favouriteDetailsRouter = require('./routes/favouriteDetails');
+
+app.use('/favourites', favouriteDetailsRouter); 
+
+
 
 
 //  Become Passenger
 const becomePassengerRoute = require('./routes/becomePassenger');
 app.use('/api/become-passenger', becomePassengerRoute);
 
+//  reset
+const Reset = require("./routes/reset");
+app.use('/User', Reset);
 
 const getPassengerByUserId = require('./routes/getPassengerByUserId');
 app.use('/api/get-passenger', getPassengerByUserId);
@@ -194,6 +214,72 @@ app.post('/login', async (req, res) => {
   }
 });
 
+app.get('/user-by-email', async (req, res) => {
+  const { email } = req.query;
+
+  if (!email) {
+    return res.status(400).json({ 
+      error: 'Email parameter is required' 
+    });
+  }
+
+  try {
+    const query = `
+      SELECT 
+       "UserID",
+        "username",
+        "email",
+        "last_role"
+      FROM "User"
+      WHERE "email" = $1
+    `;
+
+    const { rows } = await client.query(query, [email]);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'User not found' 
+      });
+    }
+
+    res.json(rows[0]);
+
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error' 
+    });
+  }
+});
+
+// Add this to server.js before the app.listen() call
+app.get('/check-email', async (req, res) => {
+  const { email } = req.query;
+  
+  if (!email) {
+    return res.status(400).json({ 
+      error: 'Email parameter is required' 
+    });
+  }
+
+  try {
+    // Check PostgreSQL
+    const pgResult = await client.query(
+      'SELECT 1 FROM "User" WHERE email = $1', 
+      [email]
+    );
+    
+    res.json({ 
+      exists: pgResult.rows.length > 0 
+    });
+    
+  } catch (error) {
+    console.error('Email check error:', error);
+    res.status(500).json({ 
+      error: 'Check failed' 
+    });
+  }
+});
 
 // ✅ Get user by email
 app.get('/user', async (req, res) => {
@@ -226,13 +312,15 @@ app.get('/user-by-id/:userId', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// ✅ Get Driver by UserID
 app.get('/driver-by-user-id/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
-    const result = await client.query('SELECT "DriverID" FROM "Driver" WHERE "UserID" = $1', [userId]);
+    const result = await client.query('SELECT "DriverID","status" FROM "Driver" WHERE "UserID" = $1', [userId]);
 
     if (result.rows.length > 0) {
-      res.json({ DriverID: result.rows[0].DriverID });
+      const { DriverID, status } = result.rows[0];
+      res.json({ DriverID, status });
     } else {
       res.status(404).json({ message: 'Driver not found' });
     }

@@ -39,4 +39,26 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+router.post("/update-password", async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    // Generate salt
+    const salt = await bcrypt.genSalt(10);
+    // Hash new password with salt
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await pool.query(
+      `UPDATE "User" SET "password" = $1 WHERE "email" = $2`,
+      [hashedPassword, email]
+    );
+
+    res.json({ message: "Password updated in PostgreSQL" });
+  } catch (err) {
+    console.error("Update password error:", err);
+    res.status(500).json({ error: "Failed to update password" });
+  }
+});
+
+
+
 module.exports = router;

@@ -1,7 +1,14 @@
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';  // ✅ Import LogBox
 import { NavigationContainer } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { createStackNavigator } from '@react-navigation/stack';
 import Toast from 'react-native-toast-message'; // ✅ In-app toast
+
+// ✅ Ignore specific warning
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text>'
+]);
 
 // ✅ Notification Setup
 import { registerForPushNotificationsAsync } from './src//utils/NotificationSetup';
@@ -70,6 +77,14 @@ useEffect(() => {
   initializeApp();
 }, []);
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
   return (
     <>
       <NavigationContainer>
@@ -92,12 +107,12 @@ useEffect(() => {
           <Stack.Screen name="CarpoolProfileList" component={CarpoolProfileList} options={{ headerShown: false }} />
           <Stack.Screen name="CarpoolStatusScreen" component={CarpoolStatusScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChatUI" component={ChatUI} options={{ headerShown: false }} />
-          <Stack.Screen name="History" component={History} />
-          <Stack.Screen name="Favourite" component={Favourite} />
-          <Stack.Screen name="Offers" component={Offers} />
+          <Stack.Screen name="History" component={History} options={{ headerShown: false }}/>
+          <Stack.Screen name="Favourite" component={Favourite} options={{ headerShown: false }}/>
+          <Stack.Screen name="Offers" component={Offers}options={{ headerShown: false }} />
           <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
           <Stack.Screen name="about" component={about} />
-          <Stack.Screen name="Support" component={Support} />
+          <Stack.Screen name="Support" component={Support}options={{ headerShown: false }} />
           <Stack.Screen name="SettingsScreen" component={SettingsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChangePassword" component={ChangePassword} options={{ headerShown: false }} />
 

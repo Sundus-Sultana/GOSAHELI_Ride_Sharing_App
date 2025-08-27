@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const client = require('../db');
 
-// GET /api/passenger/accepted-requests/:passengerId
 /// GET accepted carpool requests for a passenger (with driver & vehicle info)
 router.get('/accepted-requests/:passengerId', async (req, res) => {
   const { passengerId } = req.params;

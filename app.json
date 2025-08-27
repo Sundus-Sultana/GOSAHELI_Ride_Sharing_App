@@ -6,6 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+     "scheme": "saheli",
+    "deepLinks": ["https://saheli-2228c.firebaseapp.com"],
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",

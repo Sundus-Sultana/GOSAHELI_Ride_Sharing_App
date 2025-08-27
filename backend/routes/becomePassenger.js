@@ -52,60 +52,85 @@ router.post('/', async (req, res) => {
 
 router.get('/user-by-request/:requestId', async (req, res) => {
   const { requestId } = req.params;
-    console.log('🔍 user-by-request route HIT with ID:', req.params.requestId);
+  console.log('🔍 Fetching data for request ID:', requestId);
 
   try {
-    // First get PassengerID from Carpool_Request_Status
-    const passengerIdResult = await client.query(
-      `SELECT "PassengerID" FROM "Carpool_Request_Status" 
-       WHERE "RequestID" = $1`,
+    // 1. Get basic request info with DriverID and PassengerID
+    const requestQuery = await client.query(
+      `SELECT crs."PassengerID", crs."DriverID", d."UserID" as "DriverUserID"
+       FROM "Carpool_Request_Status" crs
+       LEFT JOIN "Driver" d ON crs."DriverID" = d."DriverID"
+       WHERE crs."RequestID" = $1`,
       [requestId]
     );
 
-    if (passengerIdResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Request not found or no passenger assigned' });
+    if (requestQuery.rows.length === 0) {
+      console.log('❌ Request not found');
+      return res.status(404).json({ 
+        success: false,
+        error: 'Request not found' 
+      });
     }
 
-    const passengerId = passengerIdResult.rows[0].PassengerID;
+    const { PassengerID, DriverID, DriverUserID } = requestQuery.rows[0];
+    console.log('📌 Found PassengerID:', PassengerID, 'DriverID:', DriverID, 'DriverUserID:', DriverUserID);
 
-    // Then get UserID from Passenger table
-    const userIdResult = await client.query(
-      `SELECT "UserID" FROM "Passenger" 
-       WHERE "PassengerID" = $1`,
-      [passengerId]
-    );
+    // 2. Prepare response
+    const response = {
+      success: true,
+      username: null,
+      driverusername: null,
+      photo_url: null,
+      driverphoto_url: null,
+      userId: null,
+      driverUserId: null
+    };
 
-    if (userIdResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Passenger not found' });
+    // 3. Fetch passenger data
+    if (PassengerID) {
+      const passengerQuery = await client.query(
+        `SELECT u."UserID", u."username", u."photo_url" 
+         FROM "Passenger" p
+         JOIN "User" u ON p."UserID" = u."UserID"
+         WHERE p."PassengerID" = $1`,
+        [PassengerID]
+      );
+
+      if (passengerQuery.rows.length > 0) {
+        response.userId = passengerQuery.rows[0].UserID;
+        response.username = passengerQuery.rows[0].username;
+        response.photo_url = passengerQuery.rows[0].photo_url;
+      }
     }
 
-    const userId = userIdResult.rows[0].UserID;
+    // 4. Fetch driver data - CRITICAL FIX
+    if (DriverUserID) {  // Now using DriverUserID which we got from the first query
+      const driverQuery = await client.query(
+        `SELECT "username", "photo_url" 
+         FROM "User"
+         WHERE "UserID" = $1`,
+        [DriverUserID]
+      );
 
-    // Finally get username from User table
-    const userResult = await client.query(
-      `SELECT "username","photo_url" FROM "User" 
-       WHERE "UserID" = $1`,
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      if (driverQuery.rows.length > 0) {
+        response.driverusername = driverQuery.rows[0].username;
+        response.driverphoto_url = driverQuery.rows[0].photo_url;
+        response.driverUserId = DriverUserID;
+      }
     }
 
-    res.json({ 
-      userId: userId,
-      username: userResult.rows[0].username,
-       photo_url: userResult.rows[0].photo_url 
-    });
+    console.log('Final API Response:', response);
+    res.json(response);
 
   } catch (error) {
-    console.error('Error fetching passenger userId:', error);
-    res.status(500).json({ error: 'Server error' });
+    console.error('🔥 Database error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 });
-
-
-// Add this to your backend routes
+    // ✅ Get user by userId
 router.get('/user-by-id/:userId', async (req, res) => {
   const { userId } = req.params;
   

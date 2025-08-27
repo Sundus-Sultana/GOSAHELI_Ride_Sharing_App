@@ -22,6 +22,8 @@ import { FontAwesome5, MaterialIcons } from "@expo/vector-icons";
 import DriverMenuOverlay from "../components/DriverMenuOverlay"; // ✅ Correct import name
 import { auth } from "../firebase/setup";
 import { getRideHistory, getUser, getDriverById } from "../../api.js";
+import { getNotifications, markNotificationsAsRead } from "../utils/ApiCalls.js";
+
 import SaheliLogo from "../../assets/IconWomen2.png";
 import { registerForPushNotificationsAsync } from '../utils/NotificationSetup'; // Adjust path if needed
 // Add at the top with other imports
@@ -47,50 +49,155 @@ const DriverHome = ({ route }) => {
     return `PKR ${amount.toLocaleString("en-PK")}`;
   };
 
+  // Add this helper function to format time to PKT
+  const formatToPktTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
 
+    const now = new Date();
+    const pastDate = new Date(timestamp);
+    const seconds = Math.floor((now - pastDate) / 1000);
 
+    // Within last 24 hours
+    if (seconds < 86400) {
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 1) return 'Just now';
+      if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
 
- useEffect(() => {
-  const fetchDriver = async () => {
-    if (!userId) return;
-    try {
-      console.log('Fetching driver for user id:', userId);
-      const driverData = await getDriverById(userId);
-      if (driverData) {
-        setDriver(driverData);
-        console.log('Driver data:', driverData);
-        // Store driver ID for later use
-        await AsyncStorage.setItem('DriverID', driverData.DriverID.toString());
+      const hours = Math.floor(minutes / 60);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+
+    // Between 24-48 hours ago
+    if (seconds < 172800) {
+      return 'Yesterday';
+    }
+
+    // 2-6 days ago
+    if (seconds < 604800) {
+      const days = Math.floor(seconds / 86400);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    // More than 1 week ago - show actual date
+    return pastDate.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Add this state to the component
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Add polling inside useEffect
+  useEffect(() => {
+    let intervalId;
+
+    const fetchNotifications = async () => {
+      if (!userId) return;
+      try {
+        const notifs = await getNotifications(userId);
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
       }
-    } catch (err) {
-      console.error("Error fetching driver data:", err);
+    };
+
+    if (notificationVisible) {
+      // Start polling every 1.5 seconds while overlay is open
+      fetchNotifications();
+      intervalId = setInterval(fetchNotifications, 1500);
+    }
+
+    return () => {
+      // Cleanup when overlay closes or component unmounts
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [notificationVisible, userId]);
+
+
+  // Add this useEffect to fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!userId)
+        return;
+      try {
+        console.log('Fetching notifications for user:', userId);
+        const notifs = await getNotifications(userId);
+        console.log('Notifications received:', notifs);
+
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+
+    fetchNotifications();
+  }, [userId, notificationVisible]); // Refresh when notification overlay opens/closes
+
+  const handleNotificationPress = async () => {
+    setNotificationVisible(true);
+    if (unreadCount > 0) {
+      console.log('Marking notifications as read for user:', userId);
+
+      try {
+        await markNotificationsAsRead(userId);
+        setUnreadCount(0);
+        // Update local notifications to mark as read
+        setNotifications(notifs => notifs.map(n => ({ ...n, isRead: true })));
+      } catch (err) {
+        console.error("Error marking notifications as read:", err);
+      }
     }
   };
 
-  fetchDriver();
-}, [userId]);
-
-
-   // In DriverHome.js, modify the useEffect for push notifications:
-useEffect(() => {
-  const initializePushNotifications = async () => {
-    try {
-      // Wait until we have both userId and driverId
-      if (userId && driver?.DriverID) {
-        const alreadyAsked = await AsyncStorage.getItem('PushPermissionAsked');
-        
-        if (!alreadyAsked) {
-          await registerForPushNotificationsAsync(userId);
-          await AsyncStorage.setItem('PushPermissionAsked', 'true');
+  useEffect(() => {
+    const fetchDriver = async () => {
+      if (!userId) return;
+      try {
+        console.log('Fetching driver for user id:', userId);
+        const driverData = await getDriverById(userId);
+        if (driverData) {
+          setDriver(driverData);
+          console.log('Driver data:', driverData);
+          // Store driver ID for later use
+          await AsyncStorage.setItem('DriverID', driverData.DriverID.toString());
         }
+      } catch (err) {
+        console.error("Error fetching driver data:", err);
       }
-    } catch (err) {
-      console.error('❌ Push notification initialization error:', err);
-    }
-  };
+    };
 
-  initializePushNotifications();
-}, [userId, driver]); // Add driver to dependencies
+    fetchDriver();
+  }, [userId]);
+
+
+  // In DriverHome.js, modify the useEffect for push notifications:
+  useEffect(() => {
+    const initializePushNotifications = async () => {
+      try {
+        // Wait until we have both userId and driverId
+        if (userId && driver?.DriverID) {
+          const alreadyAsked = await AsyncStorage.getItem('PushPermissionAsked');
+
+          if (!alreadyAsked) {
+            await registerForPushNotificationsAsync(userId);
+            await AsyncStorage.setItem('PushPermissionAsked', 'true');
+          }
+        }
+      } catch (err) {
+        console.error('❌ Push notification initialization error:', err);
+      }
+    };
+
+    initializePushNotifications();
+  }, [userId, driver]); // Add driver to dependencies
 
   useFocusEffect(
     React.useCallback(() => {
@@ -154,7 +261,12 @@ useEffect(() => {
     } else {
       Alert.alert("Thanks for your feedback!", "We appreciate your honesty. What could we improve?", [
         { text: "Cancel", style: "cancel" },
-        { text: "Give Feedback", onPress: () => navigation.navigate("Support") },
+        {
+          text: "Give Feedback", onPress: () => navigation.navigate("Support", {
+            userId: userId,
+            driverId: driver?.DriverID,  // Pass driverId
+          })
+        },
       ]);
     }
   };
@@ -196,17 +308,32 @@ useEffect(() => {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <FontAwesome5 name="arrow-left" size={24} color="white" />
+            {/* Header<FontAwesome5 name="arrow-left" size={24} color="white" />*/}
             <Text style={styles.backText}>Saheli</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              console.log("Menu opened");
-              setMenuVisible(true);
-            }}
-          >
-            <MaterialIcons name="menu" size={30} color="white" />
-          </TouchableOpacity>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity
+              onPress={handleNotificationPress}
+              style={styles.notificationButton}
+            >
+              <MaterialIcons name="notifications" size={26} color="white" />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                console.log("Menu opened");
+                setMenuVisible(true);
+              }}
+            >
+              <MaterialIcons name="menu" size={30} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Menu Overlay (render always, handle inside) */}
@@ -328,6 +455,69 @@ useEffect(() => {
           />
         </View>
 
+        // Add the NotificationOverlay component (place this near the DriverMenuOverlay)
+        <Modal
+          transparent
+          visible={notificationVisible}
+          animationType="fade"
+          onRequestClose={() => setNotificationVisible(false)}
+        >
+          <View style={styles.notificationOverlay}>
+            <View style={styles.notificationContainer}>
+              <View style={styles.notificationHeader}>
+                <Text style={styles.notificationTitle}>Notifications</Text>
+                <TouchableOpacity
+                  onPress={() => setNotificationVisible(false)}
+                  style={styles.closeButton}
+                >
+                  <MaterialIcons name="close" size={24} color="#d63384" />
+                </TouchableOpacity>
+              </View>
+
+              {notifications.length === 0 ? (
+                <View style={styles.noNotifications}>
+                  <MaterialIcons name="notifications-off" size={40} color="#d63384" />
+                  <Text style={styles.noNotificationsText}>No notifications yet</Text>
+                  <Text style={styles.noNotificationsSubtext}>We'll notify you when something arrives</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={notifications}
+                  keyExtractor={(item) => item.NotificationID.toString()}
+                  renderItem={({ item }) => (
+                    <View style={[
+                      styles.notificationItem,
+                      !item.isRead && styles.unreadNotification
+                    ]}>
+                      <View style={styles.notificationIcon}>
+                        {item.type === 'alert' ? (
+                          <MaterialIcons name="warning" size={24} color="#FF5252" />
+                        ) : item.type === 'Password Change' ? (
+                          <MaterialIcons name="security" size={24} color="#4CAF50" />
+                        ) : item.type === 'Carpool' ? (
+                          <MaterialIcons name="directions-car" size={24} color="#d63384" />
+                        ) : (
+                          <MaterialIcons name="info" size={24} color="#2196F3" />
+                        )}
+                      </View>
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationMessage}>{item.message}</Text>
+                        <View style={styles.notificationTimeContainer}>
+                          <MaterialIcons name="access-time" size={14} color="#888" />
+                          <Text style={styles.notificationTime}>
+                            {formatToPktTime(item.createdAt)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  contentContainerStyle={styles.notificationList}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+
         {/* Rating Modal */}
         <Modal transparent visible={showRating && !hasRated} animationType="fade">
           <View style={styles.ratingOverlay}>
@@ -365,9 +555,38 @@ useEffect(() => {
             <MaterialIcons name="home" size={25} color="#d63384" />
             <Text style={styles.navText}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
-            <MaterialIcons name="favorite-border" size={25} color="#888" />
-            <Text style={styles.navText}>Favorites</Text>
+          {/* My Rides (Updated) */}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => navigation.navigate('DriverCarpoolStatusScreen', {
+              userId: userId,
+              driverId: driver?.DriverID,
+            })}>
+
+            <View style={{ position: 'relative' }}>
+              <MaterialIcons name="directions-car" size={25} color="#888" />
+              {/* Status dots (⚪⚪⚪) */}
+              <View style={{
+                position: 'absolute',
+                top: -3,
+                right: -8,
+                flexDirection: 'row'
+              }}>
+                {[1, 2, 3].map((item) => (
+                  <View
+                    key={item}
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor: '#888',
+                      marginHorizontal: 1
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+            <Text style={styles.navText}>My Carpools</Text>
           </TouchableOpacity>
 
           <View style={styles.navItem}></View>
@@ -422,6 +641,14 @@ const styles = StyleSheet.create({
     padding: 15,
     paddingTop: 10,
   },
+  headerIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  notificationButton: {
+    marginRight: 20, // Space between notification and menu icons
+    position: 'relative',
+  },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -431,6 +658,116 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginLeft: 10,
     fontWeight: 'bold',
+  },
+
+  notificationBadge: {
+    position: 'absolute',
+    right: -5,
+    top: -5,
+    backgroundColor: 'red',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  notificationOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  notificationContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 15,
+  },
+  notificationTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#d63384',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  notificationList: {
+    paddingBottom: 20,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginVertical: 5,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  unreadNotification: {
+    backgroundColor: '#fff5f9',
+    borderLeftWidth: 3,
+    borderLeftColor: '#d63384',
+  },
+  notificationIcon: {
+    marginRight: 15,
+    marginTop: 3,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 5,
+    lineHeight: 20,
+  },
+  notificationTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 5,
+  },
+  noNotifications: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noNotificationsText: {
+    fontSize: 18,
+    color: '#555',
+    marginTop: 15,
+    fontWeight: '500',
+  },
+  noNotificationsSubtext: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 5,
   },
   sliderContainer: {
     height: 200,

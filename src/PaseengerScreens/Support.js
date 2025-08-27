@@ -1,39 +1,24 @@
 import React, { useState, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TextInput, 
-  TouchableOpacity, 
-  Linking,
-  Alert,
-  Animated,
-  Easing,
-  Dimensions,
-   Image
-} from 'react-native';
-import { 
-  Ionicons, 
-  MaterialIcons, 
-  FontAwesome5, 
-  MaterialCommunityIcons 
-} from '@expo/vector-icons';
-
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Linking, Alert, Animated, Easing, Dimensions, Image } from 'react-native';
+import { Ionicons, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import { getUserById, getDriverById, getPassengerByUserId, submitComplaintApi } from '../../api';
 const { width } = Dimensions.get('window');
 
-const Support = ({ navigation }) => {
+const Support = ({ navigation, route }) => {
+  const userId = route?.params?.userId || null;
+  console.log('userid in support: ', userId);
   const [message, setMessage] = useState('');
-  const [subject, setSubject] = useState('');
-  const [email, setEmail] = useState('');
   const [expandedQuestion, setExpandedQuestion] = useState(null);
   const animation = useRef(new Animated.Value(0)).current;
 
+  // Basic FAQs
   const faqs = [
     {
       id: 'payment',
       question: 'How do I pay for rides?',
-      answer: 'You can pay for rides using cash or through our in-app payment system. We accept all major credit/debit cards and mobile payment options.'
+      answer: 'You can pay for rides using cash. We accept all major credit/debit cards and mobile payment options.'
     },
     {
       id: 'safety',
@@ -66,25 +51,9 @@ const Support = ({ navigation }) => {
     }
   };
 
-  const handleSubmit = () => {
-    if (!subject || !message || !email) {
-      Alert.alert('Error', 'Please fill all fields');
-      return;
-    }
-    
-    Alert.alert(
-      'Message Sent',
-      'Thank you for contacting SAHELI support. We will get back to you soon.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
-    
-    setSubject('');
-    setMessage('');
-    setEmail('');
-  };
-
+  //open external links
   const openContact = (method, value) => {
-    switch(method) {
+    switch (method) {
       case 'phone':
         Linking.openURL(`tel:${value}`);
         break;
@@ -99,179 +68,230 @@ const Support = ({ navigation }) => {
     }
   };
 
+//submitComplaint()
+  const submitComplaint = async () => {
+    if (!message.trim()) {
+      Alert.alert('Error', 'Please enter your message.');
+      return;
+    }
+    try {
+      // 1️⃣ Get user data
+      const userData = await getUserById(userId);
+      if (!userData) {
+        Alert.alert('Error', 'Unable to fetch user details.');
+        return;
+      }
+
+      let driverId = null;
+      let passengerId = null;
+
+      if (userData.last_role === 'driver') {
+        const driverData = await getDriverById(userId);
+        if (driverData && driverData.driver) {
+          driverId = driverData.driver.DriverID;
+          console.log('driverid in support : ', driverId);
+        }
+      } else if (userData.last_role === 'passenger') {
+        const passengerData = await getPassengerByUserId(userId);
+        if (passengerData && passengerData.passenger) {
+          passengerId = passengerData.passenger.PassengerID;
+          console.log('passengerid in support: ', passengerId);
+        }
+      }
+
+      if (!driverId && !passengerId) {
+        Alert.alert('Error', 'Unable to find related Driver or Passenger record.');
+        return;
+      }
+
+      // 2️⃣ Submit complaint
+      const complaintResponse = await submitComplaintApi({
+        driverId,
+        passengerId,
+        description: message
+      });
+      console.log('driverid, passengerid, message: ', driverId, passengerId, message);
+
+      if (complaintResponse && complaintResponse.message) {
+        Alert.alert('Success', complaintResponse.message, [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+        setMessage('');
+      } else {
+        Alert.alert('Error', 'Failed to submit complaint.');
+      }
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'An unexpected error occurred.');
+    }
+  };
+
+
   return (
-    <View style={styles.container}>
-      {/* Header with solid color instead of gradient */}
-      <View style={styles.headerContainer}>
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-                    <Image
-                      source={require('../../assets/IconWomen.png')}
-                      style={styles.logoImage}
-                    />
-                    <Image
-                      source={require('../../assets/location.png')}
-                      style={styles.locationImage}
-                    />
-                  </View>
-          <Text style={styles.title}>SAHELI Support</Text>
-          <Text style={styles.subtitle}>We're here to help you</Text>
-        </View>
-      </View>
-
-      <ScrollView style={styles.scrollContainer}>
-        {/* Contact Form */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Send us a message</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Subject</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="What's this about?"
-              value={subject}
-              onChangeText={setSubject}
-              placeholderTextColor="#999"
-            />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar backgroundColor="#d63384" barStyle="light-content" />
+      <View style={styles.container}>
+        {/* Back Button */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={30} color="#fff" />
+        </TouchableOpacity>
+        {/* Header with solid color instead of gradient */}
+        <View style={styles.headerContainer}>
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('../../assets/IconWomen.png')}
+                style={styles.logoImage}
+              />
+              <Image
+                source={require('../../assets/location.png')}
+                style={styles.locationImage}
+              />
+            </View>
+            <Text style={styles.title}>SAHELI Support</Text>
+            <Text style={styles.subtitle}>We're here to help you</Text>
           </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Your Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="email@example.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Message</Text>
-            <TextInput
-              style={[styles.input, styles.messageInput]}
-              placeholder="Describe your issue..."
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={4}
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          <TouchableOpacity 
-            style={styles.submitButton}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.submitButtonText}>Send Message</Text>
-            <MaterialIcons name="send" size={20} color="#fff" style={styles.sendIcon} />
-          </TouchableOpacity>
         </View>
 
-        {/* FAQ Section */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Common Questions</Text>
-          
-          {faqs.map((faq) => (
-            <View key={faq.id} style={styles.faqContainer}>
-              <TouchableOpacity 
-                style={styles.faqQuestionContainer}
-                onPress={() => toggleQuestion(faq.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.faqQuestion}>{faq.question}</Text>
-                <Ionicons 
-                  name={expandedQuestion === faq.id ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color="#d63384" 
-                />
-              </TouchableOpacity>
-              
-              {expandedQuestion === faq.id && (
-                <Animated.View 
-                  style={[
-                    styles.faqAnswerContainer,
-                    {
-                      opacity: animation,
-                      height: animation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, 100] // Adjust based on your content height
-                      })
-                    }
-                  ]}
+        <ScrollView style={styles.scrollContainer}>
+          {/* Contact Form */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Send us a message</Text>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Message</Text>
+              <TextInput
+                style={[styles.input, styles.messageInput]}
+                placeholder="Describe your issue..."
+                value={message}
+                onChangeText={setMessage}
+                multiline
+                numberOfLines={4}
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={submitComplaint}
+            >
+              <Text style={styles.submitButtonText}>Send Message</Text>
+              <MaterialIcons name="send" size={20} color="#fff" style={styles.sendIcon} />
+            </TouchableOpacity>
+          </View>
+
+          {/* FAQ Section */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Common Questions</Text>
+
+            {faqs.map((faq) => (
+              <View key={faq.id} style={styles.faqContainer}>
+                <TouchableOpacity
+                  style={styles.faqQuestionContainer}
+                  onPress={() => toggleQuestion(faq.id)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.faqAnswer}>{faq.answer}</Text>
-                </Animated.View>
-              )}
-            </View>
-          ))}
-        </View>
+                  <Text style={styles.faqQuestion}>{faq.question}</Text>
+                  <Ionicons
+                    name={expandedQuestion === faq.id ? "chevron-up" : "chevron-down"}
+                    size={20}
+                    color="#d63384"
+                  />
+                </TouchableOpacity>
 
-        {/* Contact Options */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Quick Help</Text>
-          
-          <TouchableOpacity 
-            style={styles.contactCard}
-            onPress={() => openContact('phone', '+923175716858')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.contactIcon}>
-              <Ionicons name="call" size={24} color="#fff" />
-            </View>
-            <View style={styles.contactTextContainer}>
-              <Text style={styles.contactMethod}>Call Support</Text>
-              <Text style={styles.contactDetail}>+92 3175716858</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d63384" />
-          </TouchableOpacity>
+                {expandedQuestion === faq.id && (
+                  <Animated.View
+                    style={[
+                      styles.faqAnswerContainer,
+                      {
+                        opacity: animation,
+                        height: animation.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 100] // Adjust based on your content height
+                        })
+                      }
+                    ]}
+                  >
+                    <Text style={styles.faqAnswer}>{faq.answer}</Text>
+                  </Animated.View>
+                )}
+              </View>
+            ))}
+          </View>
 
-          <TouchableOpacity 
-            style={styles.contactCard}
-            onPress={() => openContact('whatsapp', '923175716858')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.contactIcon, {backgroundColor: '#25D366'}]}>
-              <FontAwesome5 name="whatsapp" size={24} color="#fff" />
-            </View>
-            <View style={styles.contactTextContainer}>
-              <Text style={styles.contactMethod}>WhatsApp</Text>
-              <Text style={styles.contactDetail}>Chat with us</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d63384" />
-          </TouchableOpacity>
+          {/* Contact Options */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Quick Help</Text>
 
-          <TouchableOpacity 
-            style={styles.contactCard}
-            onPress={() => openContact('email', 'support@saheli.com')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.contactIcon, {backgroundColor: '#D44638'}]}>
-              <MaterialIcons name="email" size={24} color="#fff" />
-            </View>
-            <View style={styles.contactTextContainer}>
-              <Text style={styles.contactMethod}>Email Us</Text>
-              <Text style={styles.contactDetail}>support@saheli.com</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d63384" />
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            <TouchableOpacity
+              style={styles.contactCard}
+              onPress={() => openContact('phone', '+923175716858')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.contactIcon}>
+                <Ionicons name="call" size={24} color="#fff" />
+              </View>
+              <View style={styles.contactTextContainer}>
+                <Text style={styles.contactMethod}>Call Support</Text>
+                <Text style={styles.contactDetail}>+92 3175716858</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#d63384" />
+            </TouchableOpacity>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => Linking.openURL('https://wa.me/923175716858')}
-      >
-        <FontAwesome5 name="whatsapp" size={24} color="#fff" />
-      </TouchableOpacity>
-    </View>
+            <TouchableOpacity
+              style={styles.contactCard}
+              onPress={() => openContact('whatsapp', '923175716858')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.contactIcon, { backgroundColor: '#25D366' }]}>
+                <FontAwesome5 name="whatsapp" size={24} color="#fff" />
+              </View>
+              <View style={styles.contactTextContainer}>
+                <Text style={styles.contactMethod}>WhatsApp</Text>
+                <Text style={styles.contactDetail}>Chat with us</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#d63384" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.contactCard}
+              onPress={() => openContact('email', 'support@saheli.com')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.contactIcon, { backgroundColor: '#D44638' }]}>
+                <MaterialIcons name="email" size={24} color="#fff" />
+              </View>
+              <View style={styles.contactTextContainer}>
+                <Text style={styles.contactMethod}>Email Us</Text>
+                <Text style={styles.contactDetail}>support@saheli.com</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#d63384" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Floating Action Button */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => Linking.openURL('https://wa.me/923175716858')}
+        >
+          <FontAwesome5 name="whatsapp" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff", // To match your header background
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -443,22 +463,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-   logoContainer: {
-    flexDirection: 'row',  
-    alignItems: 'center',  
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
     zIndex: 2,
   },
   logoImage: {
-    width: 100,  
-    height: 100, 
+    width: 100,
+    height: 100,
   },
   locationImage: {
-    width: 30,  
-    height: 30, 
-    marginLeft: -25, 
+    width: 30,
+    height: 30,
+    marginLeft: -25,
     marginBottom: 25,
   },
+  backButton: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    zIndex: 10,
+    padding: 5
+  }
+
 });
 
 export default Support;

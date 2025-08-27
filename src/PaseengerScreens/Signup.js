@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  TouchableWithoutFeedback, Platform, ActivityIndicator
+  TouchableWithoutFeedback, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView 
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { BackHandler } from 'react-native';
@@ -160,6 +160,7 @@ export default function Registration({ navigation }) {
 
   return (
     <View style={styles.screen}>
+      
       <View style={styles.container}>
         <Text style={styles.header}>Create Account</Text>
         <Text style={styles.subtitle}>Join us today!</Text>

@@ -24,6 +24,8 @@ import { auth } from '../firebase/setup';
 import { getRideHistory } from '../../api.js';
 import SaheliLogo from '../../assets/IconWomen2.png';
 import { getUserById ,getDriverById} from '../../api';
+import * as Notifications from 'expo-notifications';
+import { getNotifications, markNotificationsAsRead } from "../utils/ApiCalls.js";
 import { ScrollView } from "react-native-gesture-handler";
 import axios from 'axios'; // ✅ Make sure this is at the top
 import { API_URL } from '../../api.js'; 
@@ -45,6 +47,133 @@ const Home = ({ route }) => {
   const userName = route?.params?.userName ?? auth.currentUser?.displayName;
   console.log('USERID IN Home SCREEN', userId);
   console.log('name IN Home SCREEN', userName);
+
+
+    //  format time to PKT
+  const formatToPktTime  = (timestamp) => {
+  if (!timestamp) return 'Just now';
+  
+  const now = new Date();
+  const pastDate = new Date(timestamp);
+  const seconds = Math.floor((now - pastDate) / 1000);
+  
+  // Within last 24 hours
+  if (seconds < 86400) {
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  }
+  
+  // Between 24-48 hours ago
+  if (seconds < 172800) {
+    return 'Yesterday';
+  }
+  
+  // 2-6 days ago
+  if (seconds < 604800) {
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  }
+  
+  // More than 1 week ago - show actual date
+  return pastDate.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+  
+  
+  // Add this state to the component
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+useEffect(() => {
+  let intervalId;
+  let lastUnreadCount = 0; // keep track of previous unread count
+
+  const fetchNotifications = async () => {
+    if (!userId) return;
+    try {
+      const notifs = await getNotifications(userId);
+      setNotifications(notifs);
+
+      const unread = notifs.filter(n => !n.isRead).length;
+      setUnreadCount(unread);
+
+      // 🔔 If unread count increased, trigger local notification
+      if (unread > lastUnreadCount) {
+        const latestNotif = notifs.find(n => !n.isRead); // get one unread notif
+        if (latestNotif) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: "New Notification 📢",
+              body: latestNotif.message || "You have a new notification",
+              sound: true,
+            },
+            trigger: null, // show immediately
+          });
+        }
+      }
+
+      lastUnreadCount = unread; // update count
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
+  if (notificationVisible) {
+    fetchNotifications();
+    intervalId = setInterval(fetchNotifications, 1500);
+  }
+
+  return () => {
+    if (intervalId) clearInterval(intervalId);
+  };
+}, [notificationVisible, userId]);
+
+
+  
+  // Add this useEffect to fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!userId) 
+      return;
+      try {
+            console.log('Fetching notifications for user:', userId);
+        const notifs = await getNotifications(userId);
+      console.log('Notifications received:', notifs);
+  
+        setNotifications(notifs);
+        const unread = notifs.filter(n => !n.isRead).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    
+    fetchNotifications();
+  }, [userId, notificationVisible]); // Refresh when notification overlay opens/closes
+  
+  const handleNotificationPress = async () => {
+    setNotificationVisible(true);
+    if (unreadCount > 0) {
+            console.log('Marking notifications as read for user:', userId);
+  
+      try {
+        await markNotificationsAsRead(userId);
+        setUnreadCount(0);
+        // Update local notifications to mark as read
+        setNotifications(notifs => notifs.map(n => ({...n, isRead: true})));
+      } catch (err) {
+        console.error("Error marking notifications as read:", err);
+      }
+    }
+  };
 
  useEffect(() => {
     const askForPushOnce = async () => {
@@ -88,9 +217,12 @@ const Home = ({ route }) => {
     try {
       const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
       if (response.data.passenger?.PassengerID) {
-        setPassengerId(response.data.passenger.PassengerID);
-        console.log("PassengerID set in state:", response.data.passenger.PassengerID);
-      }
+      const passengerId = response.data.passenger.PassengerID;
+      setPassengerId(passengerId);
+      console.log("PassengerID set in state:", passengerId);
+      return passengerId;
+    }
+    return null;
     } catch (error) {
     if (error.response && error.response.status === 404) {
         // Passenger record not found — expected, so do nothing or just console log
@@ -124,6 +256,26 @@ const Home = ({ route }) => {
     }
   }
 };
+const goToFavourite = async () => {
+  if (!passengerId) {
+    try {
+      const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+      if (response.data.passenger?.PassengerID) {
+        const id = response.data.passenger.PassengerID;
+        setPassengerId(id);
+        navigation.navigate('Favourite', { passengerId: id, userId, userName });
+      } else {
+        Alert.alert("Error", "Passenger record not found.");
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Unable to fetch passenger info.");
+    }
+  } else {
+    navigation.navigate('Favourite', { passengerId, userId, userName });
+  }
+};
+
 
 const fetchPassengerIdAndNavigate = async () => {
   try {
@@ -204,6 +356,28 @@ useEffect(() => {
   fetchUserData();
 }, []);
 
+useEffect(() => {
+  if (!userId) return;
+
+  const intervalId = setInterval(async () => {
+    try {
+      // Fetch notifications
+      const notifs = await getNotifications(userId);
+
+      // Update state instantly
+      setNotifications(notifs);
+
+      // Calculate unread count
+      const unread = notifs.filter(n => !n.isRead).length;
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  }, 1500); // every 1.5 seconds
+
+  // Cleanup interval when component unmounts
+  return () => clearInterval(intervalId);
+}, [userId]);
 
 
   // Fetch ride history
@@ -239,6 +413,30 @@ useEffect(() => {
     setRating(selectedRating);
   };
 
+const fetchPassengerIdAndNavigateToSupport = async () => {
+  try {
+    console.log("Calling for support:", `${API_URL}/api/get-passenger/${userId}`);
+    const response = await axios.get(`${API_URL}/api/get-passenger/${userId}`);
+    if (response.data.passenger?.PassengerID) {
+      const passengerId = response.data.passenger.PassengerID;
+      console.log("Fetched PassengerID:", passengerId);
+      setPassengerId(passengerId);
+
+      // ✅ Navigate to Support screen
+      navigation.navigate('Support', {
+        userId: userId,
+        passengerId: passengerId
+      });
+    } else {
+      Alert.alert("Error", "Passenger record not found.");
+    }
+  } catch (error) {
+    console.error("Error fetching PassengerID:", error.response?.data || error.message);
+    Alert.alert("Error", "Unable to fetch PassengerID. Please try again.");
+  }
+};
+
+
   const submitRating = async () => {
   setHasRated(true);
   setShowRating(false);
@@ -246,12 +444,13 @@ useEffect(() => {
 
   // 🔄 Send only RateValue and UserID
   try {
-    const response = await axios.post(`${API_URL}/api/feedback`, {
-      RateValue: rating,
-      UserID: userId, // Firebase UID
-    });
+    const response = await axios.post(`${API_URL}/api/saheli-feedback`, {
+  UserID: userId,
+  RateValue: rating,
+});
 
-    console.log('✅ Feedback submitted:', response.data);
+      Alert.alert('Success', 'Feedback submitted successfully');
+      console.log('✅ Feedback saved:', response.data);
   } catch (error) {
     console.error('❌ Failed to submit feedback:', error.response?.data || error.message);
   }
@@ -268,7 +467,7 @@ useEffect(() => {
       'We appreciate your honesty. What could we improve?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Give Feedback', onPress: () => navigation.navigate('Support') }
+       { text: 'Give Feedback', onPress: fetchPassengerIdAndNavigateToSupport }
       ]
     );
   }
@@ -320,13 +519,27 @@ useEffect(() => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <FontAwesome5 name="arrow-left" size={24} color="white" />
+           {/* back <FontAwesome5 name="arrow-left" size={24} color="white" />*/}
           <Text style={styles.backText}>Saheli</Text>
         </TouchableOpacity>
-
+ <View style={styles.headerIcons}>
+    <TouchableOpacity 
+      onPress={handleNotificationPress}
+      style={styles.notificationButton}
+    >
+      <MaterialIcons name="notifications" size={26} color="white" />
+      {unreadCount > 0 && (
+        <View style={styles.notificationBadge}>
+          <Text style={styles.notificationBadgeText}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
         <TouchableOpacity onPress={() => setMenuVisible(true)}>
           <MaterialIcons name="menu" size={30} color="white" />
         </TouchableOpacity>
+      </View>
       </View>
 
       {/* Menu Overlay */}
@@ -398,8 +611,6 @@ useEffect(() => {
       </View>
 
       {/* Ride History Section */}
-
-      {/* Ride History Section */}
       <View style={styles.historySection}>
         {rideHistory.length > 0 && (
           <View style={styles.historyHeader}>
@@ -444,6 +655,68 @@ useEffect(() => {
           />
         )}
       </View>
+
+
+         // Add the NotificationOverlay component (place this near the DriverMenuOverlay)
+      <Modal
+        transparent
+        visible={notificationVisible}
+        animationType="fade"
+        onRequestClose={() => setNotificationVisible(false)}
+      >
+        <View style={styles.notificationOverlay}>
+          <View style={styles.notificationContainer}>
+            <View style={styles.notificationHeader}>
+              <Text style={styles.notificationTitle}>Notifications</Text>
+              <TouchableOpacity 
+                onPress={() => setNotificationVisible(false)}
+                style={styles.closeButton}
+              >
+                <MaterialIcons name="close" size={24} color="#d63384" />
+              </TouchableOpacity>
+            </View>
+            
+            {notifications.length === 0 ? (
+              <View style={styles.noNotifications}>
+                <MaterialIcons name="notifications-off" size={40} color="#d63384" />
+                <Text style={styles.noNotificationsText}>No notifications yet</Text>
+                <Text style={styles.noNotificationsSubtext}>We'll notify you when something arrives</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={(item) => item.NotificationID.toString()}
+                renderItem={({ item }) => (
+                  <View style={[
+                    styles.notificationItem,
+                    !item.isRead && styles.unreadNotification
+                  ]}>
+                    <View style={styles.notificationIcon}>
+                      {item.type === 'alert' ? (
+                        <MaterialIcons name="warning" size={24} color="#FF5252" />
+                      ) : item.type === 'Password Change' ? (
+                        <MaterialIcons name="security" size={24} color="#4CAF50" />
+                      ) : (
+                        <MaterialIcons name="info" size={24} color="#2196F3" />
+                      )}
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={styles.notificationMessage}>{item.message}</Text>
+                      <View style={styles.notificationTimeContainer}>
+                        <MaterialIcons name="access-time" size={14} color="#888" />
+                        <Text style={styles.notificationTime}>
+                          {formatToPktTime(item.createdAt)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+                contentContainerStyle={styles.notificationList}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Rating Modal */}
       <Modal
@@ -491,7 +764,8 @@ useEffect(() => {
           <MaterialIcons name="home" size={25} color="#d63384" />
           <Text style={styles.navText}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Favourite')}>
+        <TouchableOpacity style={styles.navItem} onPress={goToFavourite}>
+
           <MaterialIcons name="favorite-border" size={25} color="#888" />
           <Text style={styles.navText}>Favorites</Text>
         </TouchableOpacity>
@@ -546,6 +820,14 @@ const styles = StyleSheet.create({
     padding: 15,
     paddingTop: 10,
   },
+   headerIcons: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+notificationButton: {
+  marginRight: 20, // Space between notification and menu icons
+  position: 'relative',
+},
   backButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -555,6 +837,115 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginLeft: 10,
     fontWeight: 'bold',
+  },
+  notificationBadge: {
+  position: 'absolute',
+  right: -5,
+  top: -5,
+  backgroundColor: 'red',
+  borderRadius: 10,
+  width: 20,
+  height: 20,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+notificationBadgeText: {
+  color: 'white',
+  fontSize: 10,
+  fontWeight: 'bold',
+},
+notificationOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.5)',
+  justifyContent: 'flex-end',
+},
+notificationContainer: {
+  backgroundColor: 'white',
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  padding: 20,
+  maxHeight: '80%',
+   shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+},
+notificationHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 15,
+  borderBottomWidth: 1,
+  borderBottomColor: '#f0f0f0',
+  paddingBottom: 15,
+},
+notificationTitle: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#d63384',
+},
+ closeButton: {
+    padding: 8,
+  },
+notificationList: {
+  paddingBottom: 20,
+},
+notificationItem: {
+  flexDirection: 'row',
+  paddingVertical: 15,
+      paddingHorizontal: 10,
+   borderRadius: 10,
+    marginVertical: 5,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+},
+unreadNotification: {
+backgroundColor: '#fff5f9',
+    borderLeftWidth: 3,
+    borderLeftColor: '#d63384',
+  },
+ notificationIcon: {
+    marginRight: 15,
+    marginTop: 3,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+notificationMessage: {
+  fontSize: 14,
+  color: '#333',
+  marginBottom: 5,
+   lineHeight: 20,
+},
+ notificationTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 5,
+  },
+noNotifications: {
+  padding: 30,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+ noNotificationsText: {
+    fontSize: 18,
+    color: '#555',
+    marginTop: 15,
+    fontWeight: '500',
+  },
+  noNotificationsSubtext: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 5,
   },
   sliderContainer: {
     height: 200,

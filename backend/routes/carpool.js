@@ -1,3 +1,4 @@
+//backend/routes/carpool.js
 const express = require('express');
 const router = express.Router();
 const client = require('../db');
@@ -6,7 +7,7 @@ const client = require('../db');
 
 // Get a specific carpool profile by ID to use that profile
 router.get('/get-carpool-profile/:profileId', async (req, res) => {
-   const { profileId } = req.params;
+  const { profileId } = req.params;
   console.log("Fetching profile for ID:", profileId);
 
   try {
@@ -47,7 +48,7 @@ router.get('/get-user-carpool-profiles/:userId', async (req, res) => {
 
 // Save carpool profile
 router.post('/save-profile', async (req, res) => {
-  console.log('Received request with body:', req.body); 
+  console.log('Received request with body:', req.body);
   try {
     const {
       UserID,
@@ -68,7 +69,7 @@ router.post('/save-profile', async (req, res) => {
       fare
     } = req.body;
 
-console.log("Final route_type going to DB:", route_type);
+    console.log("Final route_type going to DB:", route_type);
 
     const query = `
   INSERT INTO carpool_profile (
@@ -87,8 +88,9 @@ console.log("Final route_type going to DB:", route_type);
     recurring_days,
     special_requests,
     route_type,
-    fare
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16)
+    fare,
+    distance_km
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16,$17)
   RETURNING carpool_profile_id;
 `;
 
@@ -108,7 +110,9 @@ console.log("Final route_type going to DB:", route_type);
       recurring_days,
       special_requests || null,
       route_type,
-      req.body.fare || null 
+      req.body.fare || null,
+      req.body.distance_km || null  // Add distance
+
     ];
 
     const result = await client.query(query, values);
@@ -204,12 +208,13 @@ router.post('/create-status-request', async (req, res) => {
         recurring_days,
         special_requests,
         route_type,
-        fare
+        fare,
+        distance_km
       ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17, $18, $19,$20
+        $16, $17, $18, $19,$20,$21
       )
       RETURNING *;
       `,
@@ -233,7 +238,9 @@ router.post('/create-status-request', async (req, res) => {
         recurring_days,
         special_requests,
         route_type,
-         req.body.fare || null 
+        req.body.fare || null,
+        req.body.distance_km || null  // Add distance
+
       ]
     );
 
@@ -264,9 +271,9 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
     );
 
     if (checkResult.rows.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Ride request not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Ride request not found'
       });
     }
 
@@ -276,10 +283,10 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
       [requestId]
     );
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: 'Ride request deleted successfully',
-      data: deleteResult.rows[0] 
+      data: deleteResult.rows[0]
     });
   } catch (error) {
     console.error('Error deleting ride request:', error);
@@ -295,11 +302,39 @@ router.delete('/delete-status-request/:requestId', async (req, res) => {
 // ✅ Get all carpool requests for a passenger
 router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
   const { passengerId } = req.params;
+  console.log("🔍 Received PassengerID:", passengerId);
 
-  console.log("🔍 Received PassengerID:", passengerId); // Debug log
-
- try {
+  try {
     const query = `
+ WITH driver_ratings AS (
+  SELECT 
+    fe."DriverID",
+    fe."RateValue",
+    fe."CreatedAt",
+    EXP(-0.1 * EXTRACT(DAY FROM (NOW() - fe."CreatedAt"))) AS time_weight
+  FROM "Feedback" fe
+  WHERE fe."DriverID" IS NOT NULL
+),
+rating_summary AS (
+  SELECT
+    d."DriverID",
+    COALESCE(
+  ROUND(
+    CASE 
+      WHEN SUM(dr.time_weight) > 0
+      THEN SUM(dr."RateValue" * dr.time_weight) / SUM(dr.time_weight)
+      ELSE 4.5
+    END, 1
+  ),
+  4.5
+) AS "WeightedRating",
+
+    COUNT(dr."RateValue") AS "RatingCount"
+  FROM "Driver" d
+  LEFT JOIN driver_ratings dr ON d."DriverID" = dr."DriverID"
+  GROUP BY d."DriverID"
+)
+      
       SELECT
         crs."RequestID",
         crs.date,
@@ -316,17 +351,21 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
         crs.music_preference,
         crs.conversation_preference,
         crs.allows_luggage,
+        crs.distance_km,
         d."DriverID",
         d."UserID" AS driver_user_id,
         u.username AS driver_name,
         u.photo_url AS driver_photo,
         v."VehicleModel",
         v."PlateNumber",
-        v.color
+        v.color,
+        rs."WeightedRating" AS "Rating",
+        rs."RatingCount"
       FROM "Carpool_Request_Status" crs
-      INNER JOIN "Driver" d ON crs."DriverID" = d."DriverID"
-      INNER JOIN "User" u ON d."UserID" = u."UserID"
+      LEFT JOIN "Driver" d ON crs."DriverID" = d."DriverID"
+      LEFT JOIN "User" u ON d."UserID" = u."UserID"
       LEFT JOIN "Vehicle" v ON d."DriverID" = v."DriverID"
+      LEFT JOIN rating_summary rs ON d."DriverID" = rs."DriverID"
       WHERE crs."PassengerID" = $1
       ORDER BY crs.date ASC;
     `;
@@ -343,19 +382,33 @@ router.get('/get-status-by-passenger/:passengerId', async (req, res) => {
 
     rows.forEach(ride => {
       const status = (ride.status || '').toLowerCase();
-      if (status === 'accepted') categorized.accepted.push(ride);
+
+      if (status === 'pending') {
+        ride.driver_user_id = null;
+        ride.driver_name = null;
+        ride.driver_photo = null;
+        ride.VehicleModel = null;
+        ride.PlateNumber = null;
+        ride.color = null;
+        ride.Rating = null;
+        ride.RatingCount = null;
+      }
+
+      if (status === 'pending') categorized.pending.push(ride);
+      else if (status === 'accepted') categorized.accepted.push(ride);
       else if (status === 'joined') categorized.upcoming.push(ride);
       else if (status === 'completed') categorized.completed.push(ride);
       else if (status === 'rejected') categorized.rejected.push(ride);
-      else if (status === 'pending') categorized.pending.push(ride);
     });
 
     res.status(200).json({ success: true, data: categorized });
+
   } catch (err) {
     console.error("Error fetching all rides:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
+
 
 // PATCH /api/carpool/update-status/:requestId
 router.patch('/update-status/:requestId', async (req, res) => {
